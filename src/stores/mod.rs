@@ -4,16 +4,19 @@ use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use futures::prelude::*;
 use http_types::Result;
-use std::io::Read;
+use serde::{Deserialize, Serialize};
 use tracing::{error, info, span, Level};
 mod readthrough;
+mod redis_cache;
 
+#[derive(Serialize, Deserialize)]
 pub struct PackageMetadata {
     integrity: String,
     last_fetched_at: DateTime<Utc>,
 }
 
 pub use readthrough::ReadThrough;
+pub use redis_cache::RedisCache;
 
 #[async_trait]
 pub trait ReadableStore : Sync {

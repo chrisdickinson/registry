@@ -8,20 +8,25 @@ mod stores;
 
 use chrono::Duration;
 
-use stores::ReadThrough;
+use stores::{ ReadThrough, RedisCache };
 
 #[async_std::main]
-async fn main() -> Result<(), std::io::Error> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let read_through = ReadThrough::new(
         "http://localhost:8080", // TODO: env var
         "https://registry.npmjs.org", // TODO: env var
-        (),
-        Duration::minutes(5)
+        ()
     );
+
+    let redis = RedisCache::new(
+        "redis://localhost:6379/",
+        read_through,
+        Duration::minutes(5)
+    ).await?;
 
     // json_logger::init("anything", log::LevelFilter::Info).unwrap();
     simple_logger::init().unwrap();
-    let mut app = tide::with_state(read_through);
+    let mut app = tide::with_state(redis);
     app.middleware(middleware::Logging::new());
 
     let _span = span!(Level::INFO, "server started");
