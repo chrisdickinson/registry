@@ -12,7 +12,12 @@ use stores::ReadThrough;
 
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
-    let read_through = ReadThrough::new("https://registry.npmjs.org", (), Duration::minutes(5));
+    let read_through = ReadThrough::new(
+        "http://localhost:8080", // TODO: env var
+        "https://registry.npmjs.org", // TODO: env var
+        (),
+        Duration::minutes(5)
+    );
 
     // json_logger::init("anything", log::LevelFilter::Info).unwrap();
     simple_logger::init().unwrap();

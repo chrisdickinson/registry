@@ -5,51 +5,51 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
 pub struct Dist {
-    shasum: String,
-    tarball: String,
+    pub(crate) shasum: String,
+    pub(crate) tarball: String,
 
-    integrity: Option<String>,
+    pub(crate) integrity: Option<String>,
     #[serde(rename = "fileCount")]
-    file_count: Option<i64>,
+    pub(crate) file_count: Option<i64>,
     #[serde(rename = "unpackedSize")]
-    unpacked_size: Option<i64>,
+    pub(crate) unpacked_size: Option<i64>,
     #[serde(rename = "npm-signature")]
-    npm_signature: Option<String>,
+    pub(crate) npm_signature: Option<String>,
 
     #[serde(flatten)]
-    rest: HashMap<String, Value>,
+    pub(crate) rest: HashMap<String, Value>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Version {
-    dist: Dist,
+    pub(crate) dist: Dist,
     #[serde(rename = "_hasShrinkwrap")]
-    has_shrinkwrap: Option<bool>,
+    pub(crate) has_shrinkwrap: Option<bool>,
 
     #[serde(flatten)]
-    rest: HashMap<String, Value>,
+    pub(crate) rest: HashMap<String, Value>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Human {
-    name: String,
-    email: String,
+    pub(crate) name: String,
+    pub(crate) email: String,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Packument {
-    author: Option<Human>,
-    name: String,
-    description: Option<String>,
-    versions: HashMap<String, Version>,
-    time: HashMap<String, DateTime<Utc>>,
+    pub(crate) author: Option<Human>,
+    pub(crate) name: String,
+    pub(crate) description: Option<String>,
+    pub(crate) versions: HashMap<String, Version>,
+    pub(crate) time: HashMap<String, DateTime<Utc>>,
     #[serde(rename = "dist-tags")]
-    tags: HashMap<String, String>,
-    maintainers: Vec<Human>,
-    users: Option<HashMap<String, bool>>,
+    pub(crate) tags: HashMap<String, String>,
+    pub(crate) maintainers: Vec<Human>,
+    pub(crate) users: Option<HashMap<String, bool>>,
 
     #[serde(flatten)]
-    rest: HashMap<String, Value>,
+    pub(crate) rest: HashMap<String, Value>,
 }
 
 /*

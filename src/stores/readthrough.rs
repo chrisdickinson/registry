@@ -1,3 +1,4 @@
+use crate::packument::Packument;
 use crate::stores::{PackageMetadata, ReadableStore, WritableStore};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
@@ -12,15 +13,17 @@ use tide::http::StatusCode;
 #[derive(Clone)]
 pub struct ReadThrough<R: ReadableStore + Send + Sync> {
     inner_store: R,
+    public_hostname: String,
     upstream_url: String,
     fetch_after: Duration,
 }
 
 impl<R: ReadableStore + Send + Sync> ReadThrough<R> {
-    pub fn new<T: AsRef<str>>(upstream_url: T, inner_store: R, fetch_after: Duration) -> Self {
+    pub fn new<T: AsRef<str>>(public_hostname: T, upstream_url: T, inner_store: R, fetch_after: Duration) -> Self {
         ReadThrough {
-            inner_store,
+            public_hostname: public_hostname.as_ref().to_string(),
             upstream_url: upstream_url.as_ref().to_string(),
+            inner_store,
             fetch_after,
         }
     }
@@ -29,6 +32,25 @@ impl<R: ReadableStore + Send + Sync> ReadThrough<R> {
 #[async_trait]
 impl<R: ReadableStore + Send + Sync> ReadableStore for ReadThrough<R> {
     type Reader = surf::Response;
+
+    async fn get_packument<T>(&self, package: T) -> Result<Option<(Packument, PackageMetadata)>>
+    where
+        T: AsRef<str> + Send + Sync,
+    {
+        if let Some((mut reader, meta)) = self.get_packument_raw(package).await? {
+            let mut bytes = Vec::with_capacity(4096);
+            reader.read_to_end(&mut bytes).await?;
+
+            let mut packument: Packument = serde_json::from_slice(&bytes[..])?;
+            for (_version_id, mut version_data) in &mut packument.versions {
+                version_data.dist.tarball = version_data.dist.tarball.replace(&self.upstream_url, &self.public_hostname);
+            }
+
+            return Ok(Some((packument, meta)));
+        }
+
+        Ok(None)
+    }
 
     async fn get_tarball<T, S>(
         &self,
@@ -71,9 +93,9 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for ReadThrough<R> {
                     },
                 )))
             },
-            StatusCode::NotFound => Ok(None),
+            StatusCode::NotFound => Ok(None), // defer to inner
             _ => {
-                // TODO: return a http_types::Error result here
+                // TODO: return a http_types::Error result here, or maybe defer to inner
                 Ok(None)
             }
         }

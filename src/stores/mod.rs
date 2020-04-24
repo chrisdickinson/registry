@@ -28,6 +28,7 @@ pub trait ReadableStore : Sync {
             reader.read_to_end(&mut bytes).await?;
 
             let packument = serde_json::from_slice(&bytes[..])?;
+
             return Ok(Some((packument, meta)));
         }
 
