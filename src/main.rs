@@ -12,13 +12,10 @@ use stores::ReadThrough;
 
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
-    let read_through = ReadThrough::new(
-        "https://registry.npmjs.org",
-        (),
-        Duration::minutes(5)
-    );
+    let read_through = ReadThrough::new("https://registry.npmjs.org", (), Duration::minutes(5));
 
-    json_logger::init("anything",  log::LevelFilter::Info).unwrap();
+    // json_logger::init("anything", log::LevelFilter::Info).unwrap();
+    simple_logger::init().unwrap();
     let mut app = tide::with_state(read_through);
     app.middleware(middleware::Logging::new());
 

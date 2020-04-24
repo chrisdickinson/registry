@@ -1,11 +1,11 @@
 use crate::packument::{Human, Packument};
-use http_types::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use futures::prelude::*;
+use http_types::Result;
 use std::io::Read;
-
+use tracing::{error, info, span, Level};
 mod readthrough;
 
 pub struct PackageMetadata {
@@ -16,19 +16,19 @@ pub struct PackageMetadata {
 pub use readthrough::ReadThrough;
 
 #[async_trait]
-pub trait ReadableStore {
-    type Reader: AsyncRead + Send + std::marker::Unpin;
+pub trait ReadableStore : Sync {
+    type Reader: AsyncBufRead + Send + Sync + std::marker::Unpin + 'static;
 
-    async fn get_packument<T>(&self, package: T) -> Result<Option<Packument>>
+    async fn get_packument<T>(&self, package: T) -> Result<Option<(Packument, PackageMetadata)>>
     where
         T: AsRef<str> + Send + Sync,
     {
-        if let Some((mut reader, hash)) = self.get_packument_raw(package).await? {
-            let mut bytes = Vec::new();
+        if let Some((mut reader, meta)) = self.get_packument_raw(package).await? {
+            let mut bytes = Vec::with_capacity(4096);
             reader.read_to_end(&mut bytes).await?;
 
             let packument = serde_json::from_slice(&bytes[..])?;
-            return Ok(Some(packument));
+            return Ok(Some((packument, meta)));
         }
 
         Ok(None)
@@ -51,7 +51,7 @@ pub trait ReadableStore {
         Ok(None)
     }
 
-    fn get_tarball<T, S>(
+    async fn get_tarball<T, S>(
         &self,
         package: T,
         version: S,
@@ -97,5 +97,5 @@ pub trait AuthorityStore {
   always 404s.
 */
 impl ReadableStore for () {
-    type Reader = Box<dyn AsyncRead + Send + std::marker::Unpin>;
+    type Reader = Box<dyn AsyncBufRead + Send + Sync + std::marker::Unpin>;
 }

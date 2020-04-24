@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use futures::future::BoxFuture;
+use http_types::Result;
 use tide::{Middleware, Next, Request, Response};
 use tracing::{error, info, span, Level};
-use http_types::Result;
 
 #[derive(Debug)]
 pub struct Logging {}
@@ -27,7 +27,7 @@ impl<Data: Send + Sync + 'static> Middleware<Data> for Logging {
 
             match &result {
                 Ok(r) => info!(status=?r.status()),
-                Err(e) => error!(status=?e.status())
+                Err(e) => error!(status=?e.status()),
             };
 
             result

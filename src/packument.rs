@@ -46,7 +46,7 @@ pub struct Packument {
     #[serde(rename = "dist-tags")]
     tags: HashMap<String, String>,
     maintainers: Vec<Human>,
-    users: Option<Vec<String>>,
+    users: Option<HashMap<String, bool>>,
 
     #[serde(flatten)]
     rest: HashMap<String, Value>,
