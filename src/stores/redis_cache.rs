@@ -38,59 +38,76 @@ impl<R: ReadableStore + Send + Sync> RedisCache<R> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct CacheEntry {
-    packument: Packument,
+#[derive(Serialize)]
+struct PackumentCacheEntry<'a> {
+    packument: &'a str,
+    meta: &'a PackageMetadata
+}
+
+#[derive(Deserialize)]
+struct ReadPackumentCacheEntry {
+    packument: String,
     meta: PackageMetadata
 }
 
 #[async_trait]
 impl<R: ReadableStore + Send + Sync> ReadableStore for RedisCache<R> {
-    type Reader = surf::Response;
+    type PackumentReader = futures::io::Cursor<Vec<u8>>;
+    type TarballReader = futures::future::Either<futures::io::Cursor<Vec<u8>>, R::TarballReader>;
 
-    async fn get_packument<T>(&self, package: T) -> Result<Option<(Packument, PackageMetadata)>>
+    async fn get_packument<T>(&self, package: T) -> Result<Option<(Self::PackumentReader, PackageMetadata)>>
     where
         T: AsRef<str> + Send + Sync,
     {
-        // grab the thing
-
         let package_str = package.as_ref();
-
+        let cache_key = format!("p {}", package_str);
         let mut connection = self.redis.1.clone();
         let cached = redis::cmd("GET")
-            .arg(&[package_str])
+            .arg(&[&cache_key])
             .query_async::<MultiplexedConnection, Option<Vec<u8>>>(&mut connection).await?;
 
         match cached {
             Some(entry_bytes) => {
-                info!("Cache hit for {}", package_str);
-                let entry: CacheEntry = serde_json::from_slice(&entry_bytes[..])?;
-                Ok(Some((entry.packument, entry.meta)))
+                info!("packument cache hit for {}", package_str);
+                let entry: ReadPackumentCacheEntry = serde_json::from_slice(&entry_bytes[..])?;
+                Ok(Some((futures::io::Cursor::new(entry.packument.into_bytes()), entry.meta)))
             },
 
             None => {
-                info!("Cache miss for {}", package_str);
+                info!("packument cache miss for {}", package_str);
                 let inner_result = self.inner_store.get_packument(package_str).await?;
                 if inner_result.is_none() {
                     return Ok(None)
                 }
 
-                let (packument, meta) = inner_result.unwrap();
+                let (mut packument_reader, meta) = inner_result.unwrap();
 
-                let cache_entry = CacheEntry {
-                    packument,
-                    meta
-                };
-                let entry_bytes = serde_json::to_vec(&cache_entry)?;
-                let expires = self.store_for
-                    .num_seconds()
-                    .to_string();
+                // do the dumb thing that works
+                let mut packument_bytes = Vec::with_capacity(4096);
+                packument_reader.read_to_end(&mut packument_bytes).await?;
 
-                redis::cmd("SETEX")
-                    .arg(&[package_str.as_bytes(), expires.as_bytes(), entry_bytes.as_slice()])
-                    .query_async::<MultiplexedConnection, ()>(&mut connection).await?;
+                {
+                    let packument_string = unsafe {
+                        std::str::from_utf8_unchecked(&packument_bytes)
+                    };
 
-                Ok(Some((cache_entry.packument, cache_entry.meta)))
+                    let cache_entry = PackumentCacheEntry {
+                        packument: packument_string,
+                        meta: &meta
+                    };
+
+                    let entry_bytes = serde_json::to_vec(&cache_entry)?;
+                    let expires = self.store_for
+                        .num_seconds()
+                        .to_string();
+
+                    redis::cmd("SETEX")
+                        .arg(&[cache_key.as_bytes(), expires.as_bytes(), entry_bytes.as_slice()])
+                        .query_async::<MultiplexedConnection, ()>(&mut connection).await?;
+
+                }
+
+                Ok(Some((futures::io::Cursor::new(packument_bytes), meta)))
             }
         }
     }
@@ -99,21 +116,32 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for RedisCache<R> {
         &self,
         package: T,
         version: S,
-    ) -> Result<Option<(Self::Reader, PackageMetadata)>>
+    ) -> Result<Option<(Self::TarballReader, PackageMetadata)>>
     where
         T: AsRef<str> + Send + Sync,
         S: AsRef<str> + Send + Sync,
     {
-        Ok(None)
-    }
+        let package_str = package.as_ref();
+        let version_str = version.as_ref();
+        let cache_key = format!("t {} {}", package_str, version_str);
 
-    async fn get_packument_raw<T>(
-        &self,
-        package: T,
-    ) -> Result<Option<(Self::Reader, PackageMetadata)>>
-    where
-        T: AsRef<str> + Send + Sync,
-    {
+        let mut connection = self.redis.1.clone();
+        let cached = redis::cmd("GET")
+            .arg(&[&cache_key])
+            .query_async::<MultiplexedConnection, Option<Vec<u8>>>(&mut connection).await?;
+
+        match cached {
+            Some(tarball_bytes) => {
+                info!("packument cache hit for {} {}", package_str, version_str);
+                return Ok((Some))
+            },
+
+            None => {
+                info!("packument cache miss for {} {}", package_str, version_str);
+
+            }
+        }
+        // read that tarball
         Ok(None)
     }
 }

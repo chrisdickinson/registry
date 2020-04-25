@@ -10,6 +10,8 @@ use surf;
 use tracing::{error, info, span, Level};
 use tide::http::StatusCode;
 
+use async_std::io::BufReader;
+
 #[derive(Clone)]
 pub struct ReadThrough<R: ReadableStore + Send + Sync> {
     inner_store: R,
@@ -27,11 +29,45 @@ impl<R: ReadableStore + Send + Sync> ReadThrough<R> {
     }
 }
 
+impl<R: ReadableStore + Send + Sync> ReadThrough<R> {
+    async fn get_packument_raw<T>(
+        &self,
+        package: T,
+    ) -> Result<Option<(surf::Response, PackageMetadata)>>
+    where
+        T: AsRef<str> + Send + Sync,
+    {
+        let path = package.as_ref().to_string().replace("/", "%2F");
+        let url = format!("{}/{}", &self.upstream_url, &path);
+        info!("ReadThrough packument request to {}", url);
+
+        let response = surf::get(url).await?;
+
+        match response.status() {
+            StatusCode::Ok => {
+                Ok(Some((
+                    response,
+                    PackageMetadata {
+                        integrity: String::from(""),
+                        last_fetched_at: Utc::now(),
+                    },
+                )))
+            },
+            StatusCode::NotFound => Ok(None),
+            _ => {
+                // TODO: return a http_types::Error result here
+                Ok(None)
+            }
+        }
+    }
+}
+
 #[async_trait]
 impl<R: ReadableStore + Send + Sync> ReadableStore for ReadThrough<R> {
-    type Reader = surf::Response;
+    type PackumentReader = futures::io::Cursor<Vec<u8>>;
+    type TarballReader = surf::Response;
 
-    async fn get_packument<T>(&self, package: T) -> Result<Option<(Packument, PackageMetadata)>>
+    async fn get_packument<T>(&self, package: T) -> Result<Option<(Self::PackumentReader, PackageMetadata)>>
     where
         T: AsRef<str> + Send + Sync,
     {
@@ -44,7 +80,8 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for ReadThrough<R> {
                 version_data.dist.tarball = version_data.dist.tarball.replace(&self.upstream_url, &self.public_hostname);
             }
 
-            return Ok(Some((packument, meta)));
+            let entry_bytes = serde_json::to_vec(&packument)?;
+            return Ok(Some((futures::io::Cursor::new(entry_bytes), meta)));
         }
 
         Ok(None)
@@ -54,7 +91,7 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for ReadThrough<R> {
         &self,
         package: T,
         version: S,
-    ) -> Result<Option<(Self::Reader, PackageMetadata)>>
+    ) -> Result<Option<(Self::TarballReader, PackageMetadata)>>
     where
         T: AsRef<str> + Send + Sync,
         S: AsRef<str> + Send + Sync,
@@ -99,50 +136,4 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for ReadThrough<R> {
         }
     }
 
-    async fn get_packument_raw<T>(
-        &self,
-        package: T,
-    ) -> Result<Option<(Self::Reader, PackageMetadata)>>
-    where
-        T: AsRef<str> + Send + Sync,
-    {
-        //        if let Some((reader, metadata)) = self.inner_store.get_packument_raw(package).await? {
-        //            let now = Utc::now();
-        //            let dur = now.signed_duration_since(metadata.last_fetched_at);
-        //
-        //            if dur >= self.fetch_after {
-        //                // refetch and update. if it's a 304, update
-        //                // the metadata and store that, otherwise walk
-        //                // and grab each tarball and store those.
-        //
-        //            }
-        //
-        //            return Ok(Some((Box::new(reader), metadata)))
-        //        }
-
-        // Ok, go fetch it and store it in the inner store.
-
-        let path = package.as_ref().to_string().replace("/", "%2F");
-        let url = format!("{}/{}", &self.upstream_url, &path);
-        info!("ReadThrough packument request to {}", url);
-
-        let response = surf::get(url).await?;
-
-        match response.status() {
-            StatusCode::Ok => {
-                Ok(Some((
-                    response,
-                    PackageMetadata {
-                        integrity: String::from(""),
-                        last_fetched_at: Utc::now(),
-                    },
-                )))
-            },
-            StatusCode::NotFound => Ok(None),
-            _ => {
-                // TODO: return a http_types::Error result here
-                Ok(None)
-            }
-        }
-    }
 }

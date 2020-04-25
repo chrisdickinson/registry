@@ -10,7 +10,7 @@ pub async fn get_packument<State: ReadableStore>(req: Request<State>) -> Result<
 
     match req.state().get_packument(package).await? {
         Some((packument, meta)) => {
-            Ok(Response::new(StatusCode::Ok).body_json(&packument)?)
+            Ok(Response::new(StatusCode::Ok).body(packument))
         },
         None => {
             Ok(Response::new(StatusCode::NotFound))

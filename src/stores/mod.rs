@@ -20,35 +20,10 @@ pub use redis_cache::RedisCache;
 
 #[async_trait]
 pub trait ReadableStore : Sync {
-    type Reader: AsyncBufRead + Send + Sync + std::marker::Unpin + 'static;
+    type PackumentReader: AsyncBufRead + Send + Sync + std::marker::Unpin + 'static;
+    type TarballReader: AsyncBufRead + Send + Sync + std::marker::Unpin + 'static;
 
-    async fn get_packument<T>(&self, package: T) -> Result<Option<(Packument, PackageMetadata)>>
-    where
-        T: AsRef<str> + Send + Sync,
-    {
-        if let Some((mut reader, meta)) = self.get_packument_raw(package).await? {
-            let mut bytes = Vec::with_capacity(4096);
-            reader.read_to_end(&mut bytes).await?;
-
-            let packument = serde_json::from_slice(&bytes[..])?;
-
-            return Ok(Some((packument, meta)));
-        }
-
-        Ok(None)
-    }
-
-    async fn get_packument_raw<T>(
-        &self,
-        package: T,
-    ) -> Result<Option<(Self::Reader, PackageMetadata)>>
-    where
-        T: AsRef<str> + Send + Sync,
-    {
-        Ok(None)
-    }
-
-    fn get_packument_readme<T>(&self, package: T) -> Result<Option<Self::Reader>>
+    async fn get_packument<T>(&self, package: T) -> Result<Option<(Self::PackumentReader, PackageMetadata)>>
     where
         T: AsRef<str> + Send + Sync,
     {
@@ -59,7 +34,7 @@ pub trait ReadableStore : Sync {
         &self,
         package: T,
         version: S,
-    ) -> Result<Option<(Self::Reader, PackageMetadata)>>
+    ) -> Result<Option<(Self::TarballReader, PackageMetadata)>>
     where
         T: AsRef<str> + Send + Sync,
         S: AsRef<str> + Send + Sync,
@@ -82,24 +57,11 @@ pub trait WritableStore {
     ) -> Result<PackageMetadata>;
 }
 
-/*
-#[async_trait]
-pub trait AuthorityStore {
-    async fn check_password<T, S>(&self, username: T, password: S) -> Result<bool>
-        where T: AsRef<str> + Send + Sync,
-              S: AsRef<str> + Send + Sync;
-
-    async fn signup<T, S, V>(&self, username: T, password: S, email: V) -> Result<Human>
-        where T: AsRef<str> + Send + Sync,
-              S: AsRef<str> + Send + Sync,
-              V: AsRef<str> + Send + Sync;
-}
-*/
-
 /**
   The empty read store. Implemented on unit as a way to define a store that
   always 404s.
 */
 impl ReadableStore for () {
-    type Reader = Box<dyn AsyncBufRead + Send + Sync + std::marker::Unpin>;
+    type PackumentReader = Box<dyn AsyncBufRead + Send + Sync + std::marker::Unpin>;
+    type TarballReader = Box<dyn AsyncBufRead + Send + Sync + std::marker::Unpin>;
 }
