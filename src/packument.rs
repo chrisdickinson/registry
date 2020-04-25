@@ -33,7 +33,7 @@ pub struct Version {
 #[derive(Serialize, Deserialize)]
 pub struct Human {
     pub(crate) name: String,
-    pub(crate) email: String,
+    pub(crate) email: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
