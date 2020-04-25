@@ -132,13 +132,47 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for RedisCache<R> {
 
         match cached {
             Some(tarball_bytes) => {
-                info!("packument cache hit for {} {}", package_str, version_str);
-                return Ok((Some))
+                info!("tarball cache hit for {} {}", package_str, version_str);
+
+                // 4 byte metadata size, followed by metadata, followed by tarball
+                let mut meta_size_bytes = [0u8; 4];
+                meta_size_bytes.copy_from_slice(&tarball_bytes[0..4]);
+                let mut meta_size = u32::from_be_bytes(meta_size_bytes) as usize;
+                let meta: PackageMetadata = serde_json::from_slice(&tarball_bytes[4..(4 + meta_size)])?;
+                let mut tarball = futures::io::Cursor::new(tarball_bytes);
+                tarball.seek(futures::io::SeekFrom::Start(4 + meta_size as u64)).await?;
+
+                return Ok(Some((futures::future::Either::Left(tarball), meta)))
             },
 
             None => {
-                info!("packument cache miss for {} {}", package_str, version_str);
+                info!("tarball cache miss for {} {}", package_str, version_str);
+                let inner_result = self.inner_store.get_tarball(package_str, version_str).await?;
+                if inner_result.is_none() {
+                    return Ok(None)
+                }
 
+                let (mut tarball_reader, meta) = inner_result.unwrap();
+
+                let meta_bytes = serde_json::to_vec(&meta)?;
+                let len = (meta_bytes.len() as u32).to_be_bytes();
+
+                let mut cache_entry = Vec::with_capacity(4096);
+                std::io::Write::write_all(&mut cache_entry, &len)?;
+                std::io::Write::write_all(&mut cache_entry, &meta_bytes)?;
+                futures::io::copy(tarball_reader, &mut cache_entry).await?;
+
+                let expires = self.store_for
+                    .num_seconds()
+                    .to_string();
+
+                redis::cmd("SETEX")
+                    .arg(&[cache_key.as_bytes(), expires.as_bytes(), &cache_entry])
+                    .query_async::<MultiplexedConnection, ()>(&mut connection).await?;
+
+                let mut tarball = futures::io::Cursor::new(cache_entry);
+                tarball.seek(futures::io::SeekFrom::Start(4 + meta_bytes.len() as u64)).await?;
+                return Ok(Some((futures::future::Either::Left(tarball), meta)))
             }
         }
         // read that tarball
