@@ -21,7 +21,22 @@ http-types = "1.2.0"
 json_logger = "0.1.0"
 url = "2.1.1"
 redis = { git = "https://github.com/mitsuhiko/redis-rs" }
+http = "0.2.1"
+bytes = "0.5.4"
 
 [dependencies.async-std]
 version = "1.5.0"
 features = ["attributes"]
+
+[dependencies.rusoto_core]
+version = "0.43"
+default-features = false
+features = [ "rustls" ]
+
+[dependencies.rusoto_s3]
+version = "0.43"
+default-features = false
+features = [ "rustls" ]
+
+[dependencies.rusoto_credential]
+version = "0.43"
