@@ -86,6 +86,27 @@ impl async_std::io::Read for AsyncReader {
     }
 }
 
+struct Streamer(surf::Response);
+
+impl Stream for Streamer {
+    type Item = std::io::Result<bytes::Bytes>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let mut buf = bytes::BytesMut::new();
+        use async_std::io::Read;
+        match futures::ready!(Pin::new(&mut self.0).poll_read(cx, &mut buf)) {
+            Ok(n) => {
+                if n == 0 {
+                    Poll::Ready(None)
+                } else {
+                    Poll::Ready(Some(Ok(buf.into())))
+                }
+            }
+            Err(e) => Poll::Ready(Some(Err(e))),
+        }
+    }
+}
+
 impl DispatchSignedRequest for SurfRequestDispatcher {
     fn dispatch(
         &self,
@@ -96,15 +117,11 @@ impl DispatchSignedRequest for SurfRequestDispatcher {
 
         let result = response_fut
             .then(async move |result| {
-                let mut response = result.unwrap();
-
-                // TODO: Make this stream, vs. buffer the entire response in memory.
-                let body_bytes = response.body_bytes().await.unwrap();
-
+                let response = result.unwrap();
                 HttpResponse {
                     status: response.status().into(),
                     headers: HeaderMap::<String>::default(),
-                    body: body_bytes.into(),
+                    body: ByteStream::new(Streamer(response)),
                 }
             })
             .map(Result::Ok);
