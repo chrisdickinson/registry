@@ -1,24 +1,21 @@
 use anyhow::Context;
 use async_trait::async_trait;
-use chrono::{Duration, Utc};
-use crate::packument::Packument;
+use chrono::Duration;
 use crate::stores::{PackageMetadata, ReadableStore};
 use futures::prelude::*;
 use http_types::Result;
-use redis::AsyncCommands;
 use redis::aio::MultiplexedConnection;
 use serde::{Deserialize, Serialize};
-use tide::http::StatusCode;
-use tracing::{error, info, span, Level};
+use tracing::info;
 
 #[derive(Clone)]
-pub struct RedisCache<R: ReadableStore + Send + Sync> {
+pub struct RedisReader<R: ReadableStore + Send + Sync> {
     inner_store: R,
     redis: (redis::Client, MultiplexedConnection), // TKTK
     store_for: Duration,
 }
 
-impl<R: ReadableStore + Send + Sync> RedisCache<R> {
+impl<R: ReadableStore + Send + Sync> RedisReader<R> {
     pub async fn new<T: AsRef<str>>(redis_url: T, inner_store: R, store_for: Duration) -> anyhow::Result<Self> {
         let redis_str = redis_url.as_ref();
         let client = redis::Client::open(redis_str)?;
@@ -30,7 +27,7 @@ impl<R: ReadableStore + Send + Sync> RedisCache<R> {
             .await
             .context(error_msg)?;
 
-        Ok(RedisCache {
+        Ok(RedisReader {
             inner_store,
             store_for,
             redis: (client, conn)
@@ -51,7 +48,7 @@ struct ReadPackumentCacheEntry {
 }
 
 #[async_trait]
-impl<R: ReadableStore + Send + Sync> ReadableStore for RedisCache<R> {
+impl<R: ReadableStore + Send + Sync> ReadableStore for RedisReader<R> {
     type PackumentReader = futures::io::Cursor<Vec<u8>>;
     type TarballReader = futures::future::Either<futures::io::Cursor<Vec<u8>>, R::TarballReader>;
 
@@ -137,12 +134,12 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for RedisCache<R> {
                 // 4 byte metadata size, followed by metadata, followed by tarball
                 let mut meta_size_bytes = [0u8; 4];
                 meta_size_bytes.copy_from_slice(&tarball_bytes[0..4]);
-                let mut meta_size = u32::from_be_bytes(meta_size_bytes) as usize;
+                let meta_size = u32::from_be_bytes(meta_size_bytes) as usize;
                 let meta: PackageMetadata = serde_json::from_slice(&tarball_bytes[4..(4 + meta_size)])?;
                 let mut tarball = futures::io::Cursor::new(tarball_bytes);
                 tarball.seek(futures::io::SeekFrom::Start(4 + meta_size as u64)).await?;
 
-                return Ok(Some((futures::future::Either::Left(tarball), meta)))
+                Ok(Some((futures::future::Either::Left(tarball), meta)))
             },
 
             None => {
@@ -152,7 +149,7 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for RedisCache<R> {
                     return Ok(None)
                 }
 
-                let (mut tarball_reader, meta) = inner_result.unwrap();
+                let (tarball_reader, meta) = inner_result.unwrap();
 
                 let meta_bytes = serde_json::to_vec(&meta)?;
                 let len = (meta_bytes.len() as u32).to_be_bytes();
@@ -172,10 +169,8 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for RedisCache<R> {
 
                 let mut tarball = futures::io::Cursor::new(cache_entry);
                 tarball.seek(futures::io::SeekFrom::Start(4 + meta_bytes.len() as u64)).await?;
-                return Ok(Some((futures::future::Either::Left(tarball), meta)))
+                Ok(Some((futures::future::Either::Left(tarball), meta)))
             }
         }
-        // read that tarball
-        Ok(None)
     }
 }

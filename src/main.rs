@@ -1,14 +1,44 @@
+#![feature(async_closure)]
 use std::env;
-use tide::{Next, Request, Response};
-use tracing::{error, info, span, Level};
+use tracing::{info, span, Level};
 mod handlers;
 mod middleware;
 mod packument;
 mod stores;
+mod rusoto_surf;
+
+use rusoto_credential::EnvironmentProvider;
+use rusoto_s3::{ GetObjectRequest, S3, S3Client };
 
 use chrono::Duration;
 
-use stores::{ ReadThrough, RedisCache };
+use stores::{ ReadThrough, RedisReader };
+
+/*
+struct AWSCredentials {
+    env: EnvironmentProvider,
+    instance_profile: AutoRefreshingProvider<InstanceMetadataProvider>
+}
+
+#[async_trait]
+impl ProvideAwsCredentials for AWSCredentials {
+    async fn credentials(&self) -> Result<rusoto_credential::AwsCredentials, rusoto_credential::CredentialsError> {
+        if let Ok(creds) = self.env.credentials().await {
+            Ok(creds)
+        } else {
+            Err(rusoto_credential::CredentialsError::s
+            // self.instance_profile.credentials().await
+        }
+    }
+}
+    let credentials = AWSCredentials {
+        env: ,
+        instance_profile: AutoRefreshingProvider::new(InstanceMetadataProvider::default())?
+    };
+*/
+
+use crate::rusoto_surf::SurfRequestDispatcher;
+use futures::prelude::*;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -18,11 +48,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ()
     );
 
-    let redis = RedisCache::new(
+    let redis = RedisReader::new(
         "redis://localhost:6379/",
         read_through,
         Duration::minutes(5)
     ).await?;
+
+    let client = S3Client::new_with(SurfRequestDispatcher::new(), EnvironmentProvider::default(), rusoto_core::Region::default());
+
+    let resp = client.get_object(GetObjectRequest {
+        bucket: "www.neversaw.us".to_owned(),
+        key: "scratch/old-terrain/media/js/game.js".to_owned(),
+        ..Default::default()
+    }).await?;
+
+    if let Some(body) = resp.body {
+        let result: Vec<_> = body
+            .collect().await;
+
+        dbg!(result);
+    }
 
     // json_logger::init("anything", log::LevelFilter::Info).unwrap();
     simple_logger::init().unwrap();

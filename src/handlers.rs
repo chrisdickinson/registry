@@ -1,7 +1,7 @@
 use crate::stores::ReadableStore;
 use http_types::Result;
-use tide::{Next, Request, Response, http::StatusCode};
-use tracing::{error, info, span, Level};
+use tide::{Request, Response, http::StatusCode};
+use tracing::info;
 
 pub async fn get_packument<State: ReadableStore>(req: Request<State>) -> Result<Response> {
     let package: String = req.param("pkg").unwrap();
@@ -9,7 +9,7 @@ pub async fn get_packument<State: ReadableStore>(req: Request<State>) -> Result<
     info!("get packument {}", package);
 
     match req.state().get_packument(package).await? {
-        Some((packument, meta)) => {
+        Some((packument, _meta)) => {
             Ok(Response::new(StatusCode::Ok).body(packument))
         },
         None => {
@@ -18,7 +18,7 @@ pub async fn get_packument<State: ReadableStore>(req: Request<State>) -> Result<
     }
 }
 
-pub async fn put_packument<State>(req: Request<State>) -> Result<&'static str> {
+pub async fn put_packument<State>(_req: Request<State>) -> Result<&'static str> {
     Ok("put packument")
 }
 
@@ -29,16 +29,9 @@ pub async fn get_tarball<State: ReadableStore>(req: Request<State>) -> Result<Re
     let version_plus_tgz = &(tarball.replace(&package, "")[1..]);
     let version = &version_plus_tgz[..version_plus_tgz.len() - 4];
 
-    info!("get packument {}", package);
+    info!("get tarball {} {}", package, version);
 
-    match req.state().get_tarball(package, version).await? {
-        Some((response, meta)) => {
-            Ok(Response::new(StatusCode::Ok).body(response))
-        },
-        None => {
-            Ok(Response::new(StatusCode::NotFound))
-        }
-    }
+    serve_tarball(req, &package, version).await
 }
 
 pub async fn get_scoped_tarball<State: ReadableStore>(req: Request<State>) -> Result<Response> {
@@ -51,9 +44,12 @@ pub async fn get_scoped_tarball<State: ReadableStore>(req: Request<State>) -> Re
 
     let full_package = format!("{}/{}", scope, package);
     info!("get scoped tarball {}", full_package);
+    serve_tarball(req, &full_package, version).await
+}
 
-    match req.state().get_tarball(full_package, version).await? {
-        Some((response, meta)) => {
+async fn serve_tarball<State: ReadableStore>(req: Request<State>, package: &str, version: &str) -> Result<Response> {
+    match req.state().get_tarball(package, version).await? {
+        Some((response, _meta)) => {
             Ok(Response::new(StatusCode::Ok).body(response))
         },
         None => {
@@ -62,10 +58,10 @@ pub async fn get_scoped_tarball<State: ReadableStore>(req: Request<State>) -> Re
     }
 }
 
-pub async fn post_login<State>(req: Request<State>) -> Result<&'static str> {
+pub async fn post_login<State>(_req: Request<State>) -> Result<&'static str> {
     Ok("post login")
 }
 
-pub async fn get_login_poll<State>(req: Request<State>) -> Result<&'static str> {
+pub async fn get_login_poll<State>(_req: Request<State>) -> Result<&'static str> {
     Ok("get login poll")
 }

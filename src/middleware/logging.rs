@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use futures::future::BoxFuture;
 use http_types::Result;
 use tide::{Middleware, Next, Request, Response};
@@ -16,7 +15,7 @@ impl Logging {
 impl<Data: Send + Sync + 'static> Middleware<Data> for Logging {
     fn handle<'a>(
         &'a self,
-        mut cx: Request<Data>,
+        cx: Request<Data>,
         next: Next<'a, Data>,
     ) -> BoxFuture<'a, Result<Response>> {
         Box::pin(async move {

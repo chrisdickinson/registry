@@ -1,11 +1,9 @@
-use crate::packument::{Human, Packument};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use futures::future::BoxFuture;
 use futures::prelude::*;
 use http_types::Result;
 use serde::{Deserialize, Serialize};
-use tracing::{error, info, span, Level};
+
 mod readthrough;
 mod redis_cache;
 
@@ -16,14 +14,14 @@ pub struct PackageMetadata {
 }
 
 pub use readthrough::ReadThrough;
-pub use redis_cache::RedisCache;
+pub use redis_cache::RedisReader;
 
 #[async_trait]
 pub trait ReadableStore : Sync {
     type PackumentReader: AsyncBufRead + Send + Sync + std::marker::Unpin + 'static;
     type TarballReader: AsyncBufRead + Send + Sync + std::marker::Unpin + 'static;
 
-    async fn get_packument<T>(&self, package: T) -> Result<Option<(Self::PackumentReader, PackageMetadata)>>
+    async fn get_packument<T>(&self, _package: T) -> Result<Option<(Self::PackumentReader, PackageMetadata)>>
     where
         T: AsRef<str> + Send + Sync,
     {
@@ -32,8 +30,8 @@ pub trait ReadableStore : Sync {
 
     async fn get_tarball<T, S>(
         &self,
-        package: T,
-        version: S,
+        _package: T,
+        _version: S,
     ) -> Result<Option<(Self::TarballReader, PackageMetadata)>>
     where
         T: AsRef<str> + Send + Sync,

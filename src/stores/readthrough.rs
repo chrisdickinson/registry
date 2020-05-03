@@ -1,16 +1,11 @@
 use crate::packument::Packument;
-use crate::stores::{PackageMetadata, ReadableStore, WritableStore};
+use crate::stores::{PackageMetadata, ReadableStore};
 use async_trait::async_trait;
 use chrono::Utc;
 use futures::prelude::*;
 use http_types::Result;
-use std::collections::HashSet;
-use std::marker::PhantomData;
-use surf;
-use tracing::{error, info, span, Level};
+use tracing::info;
 use tide::http::StatusCode;
-
-use async_std::io::BufReader;
 
 #[derive(Clone)]
 pub struct ReadThrough<R: ReadableStore + Send + Sync> {
@@ -76,7 +71,7 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for ReadThrough<R> {
             reader.read_to_end(&mut bytes).await?;
 
             let mut packument: Packument = serde_json::from_slice(&bytes[..])?;
-            for (_version_id, mut version_data) in &mut packument.versions {
+            for mut version_data in &mut packument.versions.values_mut() {
                 version_data.dist.tarball = version_data.dist.tarball.replace(&self.upstream_url, &self.public_hostname);
             }
 
@@ -101,7 +96,7 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for ReadThrough<R> {
 
         let package_str = package.as_ref();
         let version_str = version.as_ref();
-        if package_str.len() == 0 || version_str.len() == 0 {
+        if package_str.is_empty() || version_str.is_empty() {
             // bail
             return Ok(None)
         }
@@ -135,5 +130,4 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for ReadThrough<R> {
             }
         }
     }
-
 }
