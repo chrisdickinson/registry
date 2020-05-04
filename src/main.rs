@@ -45,7 +45,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let read_through = ReadThrough::new(
         "http://localhost:8080", // TODO: env var
         "https://registry.npmjs.org", // TODO: env var
-        ()
     );
 
     let redis = RedisReader::new(

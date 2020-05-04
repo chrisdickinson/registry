@@ -8,23 +8,21 @@ use tracing::info;
 use tide::http::StatusCode;
 
 #[derive(Clone)]
-pub struct ReadThrough<R: ReadableStore + Send + Sync> {
-    inner_store: R,
+pub struct ReadThrough {
     public_hostname: String,
     upstream_url: String
 }
 
-impl<R: ReadableStore + Send + Sync> ReadThrough<R> {
-    pub fn new<T: AsRef<str>>(public_hostname: T, upstream_url: T, inner_store: R) -> Self {
+impl ReadThrough {
+    pub fn new<T: AsRef<str>>(public_hostname: T, upstream_url: T) -> Self {
         ReadThrough {
             public_hostname: public_hostname.as_ref().to_string(),
-            upstream_url: upstream_url.as_ref().to_string(),
-            inner_store,
+            upstream_url: upstream_url.as_ref().to_string()
         }
     }
 }
 
-impl<R: ReadableStore + Send + Sync> ReadThrough<R> {
+impl ReadThrough {
     async fn get_packument_raw<T>(
         &self,
         package: T,
@@ -58,7 +56,7 @@ impl<R: ReadableStore + Send + Sync> ReadThrough<R> {
 }
 
 #[async_trait]
-impl<R: ReadableStore + Send + Sync> ReadableStore for ReadThrough<R> {
+impl ReadableStore for ReadThrough {
     type PackumentReader = futures::io::Cursor<Vec<u8>>;
     type TarballReader = surf::Response;
 
@@ -123,7 +121,7 @@ impl<R: ReadableStore + Send + Sync> ReadableStore for ReadThrough<R> {
                     },
                 )))
             },
-            StatusCode::NotFound => Ok(None), // defer to inner
+            StatusCode::NotFound => Ok(None),
             _ => {
                 // TODO: return a http_types::Error result here, or maybe defer to inner
                 Ok(None)

@@ -3,9 +3,18 @@ use http_types::Result;
 
 use crate::stores::{PackageMetadata, ReadableStore};
 
-struct GuardStore<F: Fn(&str) -> bool, R: ReadableStore> {
+pub struct GuardStore<F: Fn(&str) -> bool, R: ReadableStore> {
     inner: R,
     test: F
+}
+
+impl<F: Fn(&str) -> bool, R: ReadableStore> GuardStore<F, R> {
+    pub fn new(inner: R, test: F) -> Self {
+        GuardStore {
+            inner,
+            test
+        }
+    }
 }
 
 #[async_trait]

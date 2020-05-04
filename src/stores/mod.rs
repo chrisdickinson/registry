@@ -9,6 +9,8 @@ mod redis_cache;
 mod chained;
 mod guard;
 
+pub use guard::GuardStore;
+
 #[derive(Serialize, Deserialize)]
 pub struct PackageMetadata {
     integrity: String,
