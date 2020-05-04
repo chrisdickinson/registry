@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 mod readthrough;
 mod redis_cache;
+mod chained;
+mod guard;
 
 #[derive(Serialize, Deserialize)]
 pub struct PackageMetadata {

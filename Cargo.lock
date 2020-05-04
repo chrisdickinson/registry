@@ -1099,7 +1099,7 @@ dependencies = [
  "serde 1.0.106 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.52 (registry+https://github.com/rust-lang/crates.io-index)",
  "simple_logger 1.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "surf 2.0.0-alpha.2 (git+https://github.com/http-rs/surf)",
+ "surf 2.0.0-alpha.2 (git+https://github.com/chrisdickinson/surf?rev=header-names)",
  "thiserror 1.0.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "tide 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1780,7 +1780,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "surf"
 version = "2.0.0-alpha.2"
-source = "git+https://github.com/http-rs/surf#b6d1380dbaa06eb931fa9b1993cf6099e468f0e8"
+source = "git+https://github.com/chrisdickinson/surf?rev=header-names#9eb2da597b2d37e1def5eb1c7f31589ca3d49811"
 dependencies = [
  "async-std 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "encoding_rs 0.8.22 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2434,7 +2434,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum stdweb-internal-macros 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)" = "58fa5ff6ad0d98d1ffa8cb115892b6e69d67799f6763e162a1c9db421dc22e11"
 "checksum stdweb-internal-runtime 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
 "checksum subtle 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "2d67a5a62ba6e01cb2192ff309324cb4875d0c451d55fe2319433abe7a05a8ee"
-"checksum surf 2.0.0-alpha.2 (git+https://github.com/http-rs/surf)" = "<none>"
+"checksum surf 2.0.0-alpha.2 (git+https://github.com/chrisdickinson/surf?rev=header-names)" = "<none>"
 "checksum syn 1.0.18 (registry+https://github.com/rust-lang/crates.io-index)" = "410a7488c0a728c7ceb4ad59b9567eb4053d02e8cc7f5c0e0eeeb39518369213"
 "checksum tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7a6e24d9338a0a5be79593e2fa15a648add6138caa803e2d5bc782c371732ca9"
 "checksum thiserror 1.0.16 (registry+https://github.com/rust-lang/crates.io-index)" = "d12a1dae4add0f0d568eebc7bf142f145ba1aa2544cafb195c76f0f409091b60"

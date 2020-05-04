@@ -13,7 +13,7 @@ tracing = { version = "0.1.12", features = [ "log" ] }
 log = "0.4.8"
 simple_logger = "1.5.0"
 futures = { version = "0.3.4", features = ["compat", "io-compat"] }
-surf = { git = "https://github.com/http-rs/surf" }
+surf = { git = "https://github.com/chrisdickinson/surf", rev="header-names" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.48"
 chrono = { version = "0.4", features = ["serde"] }
