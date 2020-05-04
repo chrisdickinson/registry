@@ -92,28 +92,12 @@ impl Stream for Streamer {
     type Item = std::io::Result<bytes::Bytes>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        use async_std::io::BufRead;
-
-        let result: Poll<Option<Result<_, std::io::Error>>> = match futures::ready!(Pin::new(&mut self.0).poll_fill_buf(cx)) {
-            Ok(bytes) => {
-                if bytes.is_empty() {
-                    return Poll::Ready(None)
-                } else {
-                    Poll::Ready(Some(Ok(bytes::Bytes::copy_from_slice(bytes))))
-                }
-            }
-            Err(e) => return Poll::Ready(Some(Err(e))),
-        };
-
-        let response = &mut self.0;
-        match result {
-            Poll::Ready(Some(Ok(bytes))) => {
-                Pin::new(response).consume(bytes.len());
-                Poll::Ready(Some(Ok(bytes)))
-            },
-            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending
+        let mut buf = vec![0; 1024];
+        use async_std::io::Read;
+        match futures::ready!(Pin::new(&mut self.0).poll_read(cx, &mut buf)) {
+            Ok(0) => Poll::Ready(None),
+            Ok(n) => Poll::Ready(Some(Ok(bytes::Bytes::copy_from_slice(&buf[0..n])))),
+            Err(e) => Poll::Ready(Some(Err(e))),
         }
     }
 }
