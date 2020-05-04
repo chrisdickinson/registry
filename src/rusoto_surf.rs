@@ -96,7 +96,7 @@ impl Stream for Streamer {
 
         let result: Poll<Option<Result<_, std::io::Error>>> = match futures::ready!(Pin::new(&mut self.0).poll_fill_buf(cx)) {
             Ok(bytes) => {
-                if bytes.len() == 0 {
+                if bytes.is_empty() {
                     return Poll::Ready(None)
                 } else {
                     Poll::Ready(Some(Ok(bytes::Bytes::copy_from_slice(bytes))))
