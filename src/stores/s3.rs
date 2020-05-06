@@ -21,22 +21,21 @@ impl<S3: rusoto_s3::S3> S3Store<S3> {
     }
 }
 
-pub struct TokioAsyncReadWrapper(Box<dyn tokio::io::AsyncRead + Send + Unpin>);
-
-// sure, it's sync, I promise ^^;;;;
-unsafe impl Sync for TokioAsyncReadWrapper {}
+pub struct TokioAsyncReadWrapper(std::sync::Mutex<Box<dyn tokio::io::AsyncRead + Send + Unpin>>);
 
 use std::pin::Pin;
 use std::task::{Context, Poll};
 impl futures::io::AsyncRead for TokioAsyncReadWrapper {
     fn poll_read(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         mut buf: &mut [u8],
     ) -> Poll<async_std::io::Result<usize>> {
-
         use tokio::io::AsyncRead;
-        match futures::ready!(Pin::new(&mut self.0).poll_read(cx, &mut buf)) {
+
+        let mut inner = self.0.lock().unwrap();
+
+        match futures::ready!(Pin::new(&mut *inner).poll_read(cx, &mut buf)) {
             Ok(0) => Poll::Ready(Ok(0)),
             Ok(n) => Poll::Ready(Ok(n)),
             Err(e) => Poll::Ready(Err(e)),
@@ -76,7 +75,7 @@ impl<S3: rusoto_s3::S3 + Send + Sync> ReadableStore for S3Store<S3> {
 
         if let Some(payload) = resp.body {
             let boxed = Box::new(payload.into_async_read()) as Box<dyn tokio::io::AsyncRead + Send + Unpin>;
-            let wrapped = TokioAsyncReadWrapper(boxed);
+            let wrapped = TokioAsyncReadWrapper(std::sync::Mutex::new(boxed));
             let reader = futures::io::BufReader::new(wrapped);
             return Ok(Some((reader, PackageMetadata {
                 integrity: "".to_owned(),
