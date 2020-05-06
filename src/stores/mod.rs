@@ -24,7 +24,7 @@ pub use s3::S3Store;
 
 #[async_trait]
 pub trait ReadableStore : Sync {
-    type PackumentReader: AsyncBufRead + Send + std::marker::Unpin + 'static;
+    type PackumentReader: AsyncBufRead + Send + Sync + std::marker::Unpin + 'static;
     type TarballReader: AsyncBufRead + Send + Sync + std::marker::Unpin + 'static;
 
     async fn get_packument<T>(&self, _package: T) -> Result<Option<(Self::PackumentReader, PackageMetadata)>>

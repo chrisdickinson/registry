@@ -21,7 +21,10 @@ impl<S3: rusoto_s3::S3> S3Store<S3> {
     }
 }
 
-pub struct TokioAsyncReadWrapper(Box<dyn tokio::io::AsyncRead + Send + Sync + Unpin>);
+pub struct TokioAsyncReadWrapper(Box<dyn tokio::io::AsyncRead + Send + Unpin>);
+
+// sure, it's sync, I promise ^^;;;;
+unsafe impl Sync for TokioAsyncReadWrapper {}
 
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -41,6 +44,8 @@ impl futures::io::AsyncRead for TokioAsyncReadWrapper {
     }
 }
 
+use rusoto_core::RusotoError;
+use rusoto_s3::GetObjectError;
 
 #[async_trait]
 impl<S3: rusoto_s3::S3 + Send + Sync> ReadableStore for S3Store<S3> {
@@ -53,11 +58,21 @@ impl<S3: rusoto_s3::S3 + Send + Sync> ReadableStore for S3Store<S3> {
     {
 
         let package_str = package.as_ref();
-        let resp = self.client.get_object(GetObjectRequest {
+        let result = self.client.get_object(GetObjectRequest {
             bucket: self.bucket.clone(),
-            key: format!("packages/{}", package_str),
+            key: format!("packages/{}/packument.json", package_str),
             ..Default::default()
-        }).await?;
+        }).await;
+
+        let resp = match result {
+            Ok(xs) => xs,
+            Err(e) => {
+                if let RusotoError::Service(GetObjectError::NoSuchKey(_)) = e {
+                    return Ok(None)
+                }
+                return Err(dbg!(e).into())
+            }
+        };
 
         if let Some(payload) = resp.body {
             let boxed = Box::new(payload.into_async_read()) as Box<dyn tokio::io::AsyncRead + Send + Unpin>;
@@ -85,7 +100,7 @@ impl<S3: rusoto_s3::S3 + Send + Sync> ReadableStore for S3Store<S3> {
         let version_str = version.as_ref();
         let resp = self.client.get_object(GetObjectRequest {
             bucket: self.bucket.clone(),
-            key: format!("tarballs/{}/{}", package_str, version_str),
+            key: format!("packages/{}/{}.tgz", package_str, version_str),
             ..Default::default()
         }).await?;
 

@@ -21,6 +21,7 @@ impl SurfRequestDispatcher {
     }
 }
 
+use std::str::FromStr;
 async fn surf_req(mut rusoto_req: SignedRequest) -> surf::Result<surf::Response> {
     let mut final_uri = format!(
         "{}://{}{}",
@@ -34,6 +35,12 @@ async fn surf_req(mut rusoto_req: SignedRequest) -> surf::Result<surf::Response>
 
     let url: url::Url = final_uri.parse().unwrap();
     let mut pending_req = surf::Request::new(rusoto_req.method().try_into().unwrap(), url);
+
+    for (header, value) in rusoto_req.headers {
+        let header = http_types::headers::HeaderName::from_str(&header[..]).unwrap();
+        let value = unsafe { std::str::from_utf8_unchecked(&value[0][..]) };
+        pending_req = pending_req.set_header(header, value);
+    }
 
     if let Some(payload) = rusoto_req.payload.take() {
         pending_req = match payload {
