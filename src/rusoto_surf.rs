@@ -109,6 +109,7 @@ impl Stream for Streamer {
     }
 }
 
+use rusoto_core::request::HttpDispatchError;
 impl DispatchSignedRequest for SurfRequestDispatcher {
     fn dispatch(
         &self,
@@ -119,14 +120,19 @@ impl DispatchSignedRequest for SurfRequestDispatcher {
 
         let result = response_fut
             .then(async move |result| {
-                let response = result.unwrap();
-                HttpResponse {
+                let response = match result {
+                    Ok(x) => x,
+                    Err(e) => {
+                        return Err(HttpDispatchError::new(e.status().canonical_reason().to_owned()))
+                    }
+                };
+
+                Ok(HttpResponse {
                     status: response.status().into(),
                     headers: HeaderMap::<String>::default(),
                     body: ByteStream::new(Streamer(response)),
-                }
-            })
-            .map(Result::Ok);
+                })
+            });
 
         Box::pin(result)
     }

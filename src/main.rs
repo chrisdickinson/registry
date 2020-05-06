@@ -43,23 +43,23 @@ use futures::prelude::*;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let read_through = ReadThrough::new(
+    let store = ReadThrough::new(
         "http://localhost:8080", // TODO: env var
         "https://registry.npmjs.org", // TODO: env var
     );
 
-    let redis = RedisReader::new(
+    let store = RedisReader::new(
         "redis://localhost:6379/",
-        read_through,
+        store,
         Duration::minutes(5)
     ).await?;
 
     let client = S3Client::new_with(SurfRequestDispatcher::new(), EnvironmentProvider::default(), rusoto_core::Region::default());
-    let store = S3Store::new("www.neversaw.us", client);
+    let store = (S3Store::new("www.neversaw.us", client), store);
 
-    // json_logger::init("anything", log::LevelFilter::Info).unwrap();
-    simple_logger::init().unwrap();
-    let mut app = tide::with_state((store, redis));
+    json_logger::init("anything", log::LevelFilter::Info).unwrap();
+    // simple_logger::init().unwrap();
+    let mut app = tide::with_state(store);
     app.middleware(middleware::Logging::new());
 
     let _span = span!(Level::INFO, "server started");
