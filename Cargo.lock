@@ -1102,6 +1102,7 @@ dependencies = [
  "surf 2.0.0-alpha.2 (git+https://github.com/chrisdickinson/surf?rev=header-names)",
  "thiserror 1.0.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "tide 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio 0.2.20 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "url 2.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

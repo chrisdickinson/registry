@@ -1,4 +1,5 @@
 #![feature(async_closure)]
+#![feature(type_alias_impl_trait)]
 use std::env;
 use tracing::{info, span, Level};
 mod handlers;
@@ -12,7 +13,7 @@ use rusoto_s3::{ GetObjectRequest, S3, S3Client };
 
 use chrono::Duration;
 
-use stores::{ ReadThrough, RedisReader };
+use stores::{ ReadThrough, RedisReader, S3Store };
 
 /*
 struct AWSCredentials {
@@ -54,23 +55,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ).await?;
 
     let client = S3Client::new_with(SurfRequestDispatcher::new(), EnvironmentProvider::default(), rusoto_core::Region::default());
-
-    let resp = client.get_object(GetObjectRequest {
-        bucket: "www.neversaw.us".to_owned(),
-        key: "scratch/old-terrain/media/js/game.js".to_owned(),
-        ..Default::default()
-    }).await?;
-
-    if let Some(body) = resp.body {
-        let result: Vec<_> = body
-            .collect().await;
-
-        dbg!(result);
-    }
+    let store = S3Store::new("www.neversaw.us", client);
 
     // json_logger::init("anything", log::LevelFilter::Info).unwrap();
     simple_logger::init().unwrap();
-    let mut app = tide::with_state(redis);
+    let mut app = tide::with_state((store, redis));
     app.middleware(middleware::Logging::new());
 
     let _span = span!(Level::INFO, "server started");

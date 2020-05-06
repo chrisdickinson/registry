@@ -49,7 +49,7 @@ async fn surf_req(mut rusoto_req: SignedRequest) -> surf::Result<surf::Response>
     pending_req.await
 }
 
-struct AsyncReader {
+pub struct AsyncReader {
     buffer: bytes::BytesMut,
     stream: async_std::stream::Fuse<ByteStream>,
 }
