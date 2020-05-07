@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use futures::io::AsyncWrite;
 use futures::prelude::*;
 use http_types::Result;
 use serde::{Deserialize, Serialize};
@@ -47,18 +48,28 @@ pub trait ReadableStore : Sync {
     }
 }
 
+#[async_trait]
 pub trait WritableStore {
-    fn upsert_packument<T: AsRef<str>, B: std::io::Read>(
-        &self,
-        package: T,
-        body: B,
-    ) -> Result<PackageMetadata>;
+    async fn write_packument<T, W>(&self, _package: T, _data: W, _meta: PackageMetadata) -> Result<Option<bool>>
+        where T: AsRef<str> + Send + Sync,
+              W: AsyncWrite + Send + Sync {
+        Ok(None)
+    }
 
-    fn update_metadata<T: AsRef<str>>(
+    async fn write_tarball<T, S, W>(
         &self,
-        package: T,
-        metadata: PackageMetadata,
-    ) -> Result<PackageMetadata>;
+        _package: T,
+        _version: S,
+        _data: W,
+        _meta: PackageMetadata
+    ) -> Result<Option<bool>>
+    where
+        T: AsRef<str> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
+        W: AsyncWrite + Send + Sync
+    {
+        Ok(None)
+    }
 }
 
 /**

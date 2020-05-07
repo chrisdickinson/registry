@@ -57,8 +57,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = S3Client::new_with(SurfRequestDispatcher::new(), EnvironmentProvider::default(), rusoto_core::Region::default());
     let store = (S3Store::new("www.neversaw.us", client), store);
 
-    json_logger::init("anything", log::LevelFilter::Info).unwrap();
-    // simple_logger::init().unwrap();
+    // json_logger::init("anything", log::LevelFilter::Info).unwrap();
+    simple_logger::init().unwrap();
     let mut app = tide::with_state(store);
     app.middleware(middleware::Logging::new());
 
