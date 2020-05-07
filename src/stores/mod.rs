@@ -5,7 +5,7 @@ use futures::prelude::*;
 use http_types::Result;
 use serde::{Deserialize, Serialize};
 
-mod readthrough;
+mod remote;
 mod redis_cache;
 mod chained;
 mod guard;
@@ -19,8 +19,8 @@ pub struct PackageMetadata {
     last_fetched_at: DateTime<Utc>,
 }
 
-pub use readthrough::ReadThrough;
 pub use redis_cache::RedisReader;
+pub use remote::RemoteStore;
 pub use s3::S3Store;
 
 #[async_trait]

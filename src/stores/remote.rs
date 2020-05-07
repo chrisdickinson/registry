@@ -8,21 +8,21 @@ use tracing::info;
 use tide::http::StatusCode;
 
 #[derive(Clone)]
-pub struct ReadThrough {
+pub struct RemoteStore {
     public_hostname: String,
     upstream_url: String
 }
 
-impl ReadThrough {
+impl RemoteStore {
     pub fn new<T: AsRef<str>>(public_hostname: T, upstream_url: T) -> Self {
-        ReadThrough {
+        RemoteStore {
             public_hostname: public_hostname.as_ref().to_string(),
             upstream_url: upstream_url.as_ref().to_string()
         }
     }
 }
 
-impl ReadThrough {
+impl RemoteStore {
     async fn get_packument_raw<T>(
         &self,
         package: T,
@@ -56,7 +56,7 @@ impl ReadThrough {
 }
 
 #[async_trait]
-impl ReadableStore for ReadThrough {
+impl ReadableStore for RemoteStore {
     type PackumentReader = futures::io::Cursor<Vec<u8>>;
     type TarballReader = surf::Response;
 

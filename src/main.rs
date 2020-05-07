@@ -13,7 +13,7 @@ use rusoto_s3::{ GetObjectRequest, S3, S3Client };
 
 use chrono::Duration;
 
-use stores::{ ReadThrough, RedisReader, S3Store };
+use stores::{ RemoteStore, RedisReader, S3Store };
 
 /*
 struct AWSCredentials {
@@ -43,7 +43,7 @@ use futures::prelude::*;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let store = ReadThrough::new(
+    let store = RemoteStore::new(
         "http://localhost:8080", // TODO: env var
         "https://registry.npmjs.org", // TODO: env var
     );
