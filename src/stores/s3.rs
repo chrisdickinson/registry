@@ -124,16 +124,15 @@ impl<S3: rusoto_s3::S3 + Send + Sync> WritableStore for S3Store<S3> {
             Ok(_xs) => {
                 // no need to put the object back
                 // TODO: compare xs.last_modified to incoming meta
+                info!("skipping write, already present");
                 return Ok(Some(false))
             },
-            Err(e) => {
-                if let RusotoError::Service(HeadObjectError::NoSuchKey(_)) = e {
-                } else {
-                    return Err(e.into())
-                }
-            }
+            Err(RusotoError::Service(HeadObjectError::NoSuchKey(_))) => {},
+            Err(RusotoError::Unknown(rusoto_core::request::BufferedHttpResponse { status: http::StatusCode::NOT_FOUND, body: _, headers: _ })) => {},
+            Err(e) => return Err(e.into())
         };
 
+        info!("writing tarball");
         // then PUT object request if DNE
         self.client.put_object(PutObjectRequest {
             bucket: self.bucket.clone(),
@@ -142,6 +141,7 @@ impl<S3: rusoto_s3::S3 + Send + Sync> WritableStore for S3Store<S3> {
             metadata: Some(meta.into()),
             ..Default::default()
         }).await?;
+        info!("wrote tarball");
         Ok(Some(true))
     }
 }
@@ -196,11 +196,21 @@ impl<S3: rusoto_s3::S3 + Send + Sync> ReadableStore for S3Store<S3> {
     {
         let package_str = package.as_ref();
         let version_str = version.as_ref();
-        let resp = self.client.get_object(GetObjectRequest {
+        let result = self.client.get_object(GetObjectRequest {
             bucket: self.bucket.clone(),
             key: format!("packages/{}/{}.tgz", package_str, version_str),
             ..Default::default()
-        }).await?;
+        }).await;
+
+        let resp = match result {
+            Ok(xs) => xs,
+            Err(e) => {
+                if let RusotoError::Service(GetObjectError::NoSuchKey(_)) = e {
+                    return Ok(None)
+                }
+                return Err(dbg!(e).into())
+            }
+        };
 
         if let Some(body) = resp.body {
             let reader = AsyncReader::new(body);

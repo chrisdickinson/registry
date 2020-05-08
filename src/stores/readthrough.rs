@@ -29,13 +29,13 @@ impl<L: ReadableStore + WritableStore + Send + Sync, R: ReadableStore + Send + S
         let package_str = package.as_ref();
         let cache_result = self.cache.get_packument(package_str).await?;
         if let Some((reader, meta)) = cache_result {
-            info!("read from cache");
+            info!("packument: fetch \"{}\" from cache", package_str);
             return Ok(Some((reader, meta)))
         }
 
         let inner_result = self.inner.get_packument(package_str).await?;
         if let Some((reader, meta)) = inner_result {
-            info!("writing from inner to cache");
+            info!("packument: fetch \"{}\" from inner store", package_str);
             self.cache.write_packument(package_str, reader, meta).await?;
         }
 
@@ -55,11 +55,13 @@ impl<L: ReadableStore + WritableStore + Send + Sync, R: ReadableStore + Send + S
         let version_str = version.as_ref();
         let cache_result = self.cache.get_tarball(package_str, version_str).await?;
         if let Some((reader, meta)) = cache_result {
+            info!("tarball: got \"{}\"@\"{}\" from cache", package_str, version_str);
             return Ok(Some((reader, meta)))
         }
 
         let inner_result = self.inner.get_tarball(package_str, version_str).await?;
         if let Some((reader, meta)) = inner_result {
+            info!("tarball: writing \"{}\"@\"{}\" to inner store", package_str, version_str);
             self.cache.write_tarball(package_str, version_str, reader, meta).await?;
         }
 
