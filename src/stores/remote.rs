@@ -123,7 +123,6 @@ impl ReadableStore for RemoteStore {
             },
             StatusCode::NotFound => Ok(None),
             _ => {
-                // TODO: return a http_types::Error result here, or maybe defer to inner
                 Ok(None)
             }
         }

@@ -39,7 +39,7 @@ impl<L: ReadableStore + WritableStore + Send + Sync, R: ReadableStore + Send + S
             self.cache.write_packument(package_str, reader, meta).await?;
         }
 
-        self.get_packument(package_str).await
+        self.cache.get_packument(package_str).await
     }
 
     async fn get_tarball<T, S>(
@@ -53,6 +53,7 @@ impl<L: ReadableStore + WritableStore + Send + Sync, R: ReadableStore + Send + S
     {
         let package_str = package.as_ref();
         let version_str = version.as_ref();
+        info!("tarball: fetching \"{}\"@\"{}\"", package_str, version_str);
         let cache_result = self.cache.get_tarball(package_str, version_str).await?;
         if let Some((reader, meta)) = cache_result {
             info!("tarball: got \"{}\"@\"{}\" from cache", package_str, version_str);
@@ -65,6 +66,6 @@ impl<L: ReadableStore + WritableStore + Send + Sync, R: ReadableStore + Send + S
             self.cache.write_tarball(package_str, version_str, reader, meta).await?;
         }
 
-        self.get_tarball(package_str, version_str).await
+        self.cache.get_tarball(package_str, version_str).await
     }
 }
