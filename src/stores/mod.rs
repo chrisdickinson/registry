@@ -6,19 +6,25 @@ use serde::{Deserialize, Serialize};
 
 mod readthrough;
 mod redis_cache;
+mod cacache;
 mod chained;
 mod remote;
 mod guard;
 mod s3;
 
+pub use crate::stores::cacache::CacacheStore;
+pub use readthrough::ReadThrough;
+pub use redis_cache::RedisReader;
+pub use remote::RemoteStore;
 pub use guard::GuardStore;
+pub use s3::S3Store;
 
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
 pub struct PackageMetadata {
-    integrity: String,
-    last_fetched_at: DateTime<Utc>,
+    pub(crate) integrity: String,
+    pub(crate) last_fetched_at: DateTime<Utc>,
 }
 
 impl Into<HashMap<String, String>> for PackageMetadata {
@@ -48,11 +54,6 @@ impl From<HashMap<String, String>> for PackageMetadata {
         }
     }
 }
-
-pub use readthrough::ReadThrough;
-pub use redis_cache::RedisReader;
-pub use remote::RemoteStore;
-pub use s3::S3Store;
 
 #[async_trait]
 pub trait ReadableStore : Sync {

@@ -7,7 +7,7 @@ use rusoto_s3::S3Client;
 
 use chrono::Duration;
 
-use crate::stores::{ RemoteStore, RedisReader, S3Store, ReadThrough };
+use crate::stores::{ RemoteStore, RedisReader, S3Store, ReadThrough, CacacheStore };
 use crate::rusoto_surf::SurfRequestDispatcher;
 
 mod handlers;
@@ -68,7 +68,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Duration::minutes(5)
         ).await?,
         ReadThrough::new(
-            S3Store::new(s3_bucket, client),
+            CacacheStore::new("./.cache"),
+            // S3Store::new(s3_bucket, client),
             store
         )
     );
