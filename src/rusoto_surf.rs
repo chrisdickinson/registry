@@ -9,6 +9,7 @@ use rusoto_core::ByteStream;
 use rusoto_core::DispatchSignedRequest;
 use std::convert::TryInto;
 use std::pin::Pin;
+use std::marker::Unpin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -46,9 +47,12 @@ async fn surf_req(mut rusoto_req: SignedRequest) -> surf::Result<surf::Response>
         pending_req = match payload {
             rusoto_core::signature::SignedRequestPayload::Buffer(xs) => pending_req.body_bytes(xs),
             rusoto_core::signature::SignedRequestPayload::Stream(xs) => {
-                let async_read = AsyncReader::new(xs);
-                let bufreader = async_std::io::BufReader::new(async_read);
-                pending_req.body(bufreader)
+                let mut async_read = AsyncReader::new(xs);
+                let mut bytes = Vec::with_capacity(4096);
+
+                use futures::io::AsyncReadExt;
+                async_read.read_to_end(&mut bytes).await?;
+                pending_req.body_bytes(bytes)
             }
         };
     }
@@ -93,14 +97,21 @@ impl async_std::io::Read for AsyncReader {
     }
 }
 
-struct Streamer(surf::Response);
+use futures::io::AsyncRead;
+pub(crate) struct Streamer<R: AsyncRead + Unpin>(R);
 
-impl Stream for Streamer {
+impl<R: AsyncRead + Unpin> Streamer<R> {
+    pub(crate) fn new(xs: R) -> Self {
+        Streamer(xs)
+    }
+}
+
+
+impl<R: AsyncRead + Unpin> Stream for Streamer<R> {
     type Item = std::io::Result<bytes::Bytes>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let mut buf = vec![0; 1024];
-        use async_std::io::Read;
         match futures::ready!(Pin::new(&mut self.0).poll_read(cx, &mut buf)) {
             Ok(0) => Poll::Ready(None),
             Ok(n) => Poll::Ready(Some(Ok(bytes::Bytes::copy_from_slice(&buf[0..n])))),
@@ -127,10 +138,20 @@ impl DispatchSignedRequest for SurfRequestDispatcher {
                     }
                 };
 
+                // TODO: make this better.
+                use http_types::headers::HeaderName;
+                let mut headers = HeaderMap::<String>::default();
+                let header_names = response.header_names().map(|xs| { xs.as_str().to_owned() });
+                for name in header_names {
+                    let header = HeaderName::from_str(&name[..]).unwrap();
+                    let value = response.header(&header).unwrap()[0].as_str().to_owned();
+                    headers.insert(http::header::HeaderName::from_bytes(name.as_bytes()).unwrap(), value);
+                }
+
                 Ok(HttpResponse {
                     status: response.status().into(),
-                    headers: HeaderMap::<String>::default(),
-                    body: ByteStream::new(Streamer(response)),
+                    headers,
+                    body: ByteStream::new(Streamer::new(response)),
                 })
             });
 

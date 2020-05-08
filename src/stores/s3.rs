@@ -1,10 +1,26 @@
-use rusoto_s3::{ GetObjectRequest, S3, S3Client };
+use rusoto_core::RusotoError;
+use rusoto_s3::{
+    GetObjectOutput,
+    GetObjectRequest,
+    GetObjectError,
+    HeadObjectOutput,
+    HeadObjectRequest,
+    HeadObjectError,
+    PutObjectOutput,
+    PutObjectRequest,
+    PutObjectError,
+    S3
+};
+use futures::io::AsyncBufRead;
 use async_trait::async_trait;
 use http_types::Result;
 use chrono::Utc;
+use rusoto_core::ByteStream;
 
+use tracing::info;
 use crate::rusoto_surf::AsyncReader;
-use crate::stores::{PackageMetadata, ReadableStore};
+use crate::stores::{PackageMetadata, ReadableStore, WritableStore};
+use crate::rusoto_surf::Streamer;
 
 #[derive(Clone)]
 pub struct S3Store<S3: rusoto_s3::S3> {
@@ -43,8 +59,92 @@ impl futures::io::AsyncRead for TokioAsyncReadWrapper {
 
 unsafe impl Sync for TokioAsyncReadWrapper {}
 
-use rusoto_core::RusotoError;
-use rusoto_s3::GetObjectError;
+#[async_trait]
+impl<S3: rusoto_s3::S3 + Send + Sync> WritableStore for S3Store<S3> {
+    async fn write_packument<T, W>(&self, package: T, packument_reader: W, meta: PackageMetadata) -> Result<Option<bool>>
+        where T: AsRef<str> + Send + Sync,
+              W: AsyncBufRead + Send + Sync + Unpin + 'static {
+
+        // HEAD object request
+        let package_str = package.as_ref();
+        let key = format!("packages/{}/packument.json", package_str);
+        let result = self.client.head_object(HeadObjectRequest {
+            bucket: self.bucket.clone(),
+            key: key.clone(),
+            ..Default::default()
+        }).await;
+
+        match result {
+            Ok(_xs) => {
+                // no need to put the object back
+                // TODO: compare xs.last_modified to incoming meta
+                info!("skipping write, already present");
+                return Ok(Some(false))
+            },
+            Err(RusotoError::Service(HeadObjectError::NoSuchKey(_))) => {},
+            Err(RusotoError::Unknown(rusoto_core::request::BufferedHttpResponse { status: http::StatusCode::NOT_FOUND, body: _, headers: _ })) => {},
+            Err(e) => return Err(e.into())
+        };
+
+        // then PUT object request if DNE
+        self.client.put_object(PutObjectRequest {
+            bucket: self.bucket.clone(),
+            key: key.clone(),
+            body: Some(ByteStream::new(Streamer::new(packument_reader))),
+            metadata: Some(meta.into()),
+            ..Default::default()
+        }).await?;
+        Ok(Some(true))
+    }
+
+    async fn write_tarball<T, S, W>(
+        &self,
+        package: T,
+        version: S,
+        tarball_reader: W,
+        meta: PackageMetadata
+    ) -> Result<Option<bool>>
+    where
+        T: AsRef<str> + Send + Sync,
+        S: AsRef<str> + Send + Sync,
+        W: AsyncBufRead + Send + Sync + Unpin + 'static
+    {
+
+        // HEAD object request
+        let package_str = package.as_ref();
+        let version_str = version.as_ref();
+        let key = format!("packages/{}/{}.tgz", package_str, version_str);
+        let result = self.client.head_object(HeadObjectRequest {
+            bucket: self.bucket.clone(),
+            key: key.clone(),
+            ..Default::default()
+        }).await;
+
+        match result {
+            Ok(_xs) => {
+                // no need to put the object back
+                // TODO: compare xs.last_modified to incoming meta
+                return Ok(Some(false))
+            },
+            Err(e) => {
+                if let RusotoError::Service(HeadObjectError::NoSuchKey(_)) = e {
+                } else {
+                    return Err(e.into())
+                }
+            }
+        };
+
+        // then PUT object request if DNE
+        self.client.put_object(PutObjectRequest {
+            bucket: self.bucket.clone(),
+            key: key.clone(),
+            body: Some(ByteStream::new(Streamer::new(tarball_reader))),
+            metadata: Some(meta.into()),
+            ..Default::default()
+        }).await?;
+        Ok(Some(true))
+    }
+}
 
 #[async_trait]
 impl<S3: rusoto_s3::S3 + Send + Sync> ReadableStore for S3Store<S3> {
@@ -55,7 +155,6 @@ impl<S3: rusoto_s3::S3 + Send + Sync> ReadableStore for S3Store<S3> {
     where
         T: AsRef<str> + Send + Sync,
     {
-
         let package_str = package.as_ref();
         let result = self.client.get_object(GetObjectRequest {
             bucket: self.bucket.clone(),
