@@ -14,7 +14,7 @@ impl Logging {
 
 impl<Data: Send + Sync + 'static> Middleware<Data> for Logging {
     fn handle<'a>(
-        &'a self,
+        &self,
         cx: Request<Data>,
         next: Next<'a, Data>,
     ) -> BoxFuture<'a, Result<Response>> {

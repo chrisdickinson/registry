@@ -2,6 +2,7 @@ use crate::stores::ReadableStore;
 use http_types::Result;
 use tide::{Request, Response, http::StatusCode};
 use tracing::info;
+use serde_json::json;
 
 pub async fn get_packument<State: ReadableStore>(req: Request<State>) -> Result<Response> {
     let package: String = req.param("pkg").unwrap();
@@ -53,7 +54,10 @@ async fn serve_tarball<State: ReadableStore>(req: Request<State>, package: &str,
             Ok(Response::new(StatusCode::Ok).body(response))
         },
         None => {
-            Ok(Response::new(StatusCode::NotFound))
+            let resp = json!({
+                "message": format!("Could not find {}@{}", package, version)
+            });
+            Ok(Response::new(StatusCode::NotFound).body_json(&resp)?)
         }
     }
 }

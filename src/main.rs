@@ -1,5 +1,6 @@
 #![feature(async_closure)]
 #![feature(type_alias_impl_trait)]
+#![feature(specialization)]
 use std::env;
 use tracing::{info, span, Level};
 use rusoto_credential::EnvironmentProvider;
@@ -10,35 +11,12 @@ use chrono::Duration;
 use crate::stores::{ RemoteStore, RedisReader, S3Store, ReadThrough, CacacheStore };
 use crate::rusoto_surf::SurfRequestDispatcher;
 
+mod app;
 mod handlers;
 mod middleware;
 mod packument;
 mod stores;
 mod rusoto_surf;
-
-
-/*
-struct AWSCredentials {
-    env: EnvironmentProvider,
-    instance_profile: AutoRefreshingProvider<InstanceMetadataProvider>
-}
-
-#[async_trait]
-impl ProvideAwsCredentials for AWSCredentials {
-    async fn credentials(&self) -> Result<rusoto_credential::AwsCredentials, rusoto_credential::CredentialsError> {
-        if let Ok(creds) = self.env.credentials().await {
-            Ok(creds)
-        } else {
-            Err(rusoto_credential::CredentialsError::s
-            // self.instance_profile.credentials().await
-        }
-    }
-}
-    let credentials = AWSCredentials {
-        env: ,
-        instance_profile: AutoRefreshingProvider::new(InstanceMetadataProvider::default())?
-    };
-*/
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,6 +40,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         rusoto_core::Region::default()
     );
 
+    use crate::middleware::SimpleBearerStorage;
+    use crate::middleware::SimpleBasicStorage;
     let store = ReadThrough::new(
         RedisReader::new(
             redis_url,
@@ -74,26 +54,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
     );
 
+    let unit = ();
+    let auth = (unit, (SimpleBearerStorage::default(), SimpleBasicStorage::default()));
+
+    use crate::app::package_read_routes;
+
     // json_logger::init("anything", log::LevelFilter::Info).unwrap();
     simple_logger::init_with_level(log::Level::Info).unwrap();
-    let mut app = tide::with_state(store);
+    let mut app = tide::with_state(auth);
     app.middleware(middleware::Logging::new());
+    app.middleware(middleware::Authentication::new(middleware::BasicAuthScheme::default()));
+    app.middleware(middleware::Authentication::new(middleware::BearerAuthScheme::default()));
+
+
+    //app.middleware(middleware::BearerAuthScheme::default());
 
     let _span = span!(Level::INFO, "server started");
 
-    app.at("/:pkg")
-        .get(handlers::get_packument)
-        .put(handlers::put_packument);
+    let app = package_read_routes(app, store);
+    // app.at("/-/v1/login").post(handlers::post_login);
 
-    app.at("/:pkg/-/*tarball").get(handlers::get_tarball);
-
-    app.at("/:scope/:pkg/-/*tarball")
-        .get(handlers::get_scoped_tarball);
-
-    app.at("/-/v1/login").post(handlers::post_login);
-
-    app.at("/-/v1/login/poll/:session")
-        .get(handlers::get_login_poll);
+    // app.at("/-/v1/login/poll/:session")
+    //    .get(handlers::get_login_poll);
 
     info!("server listening on address {}", &addr);
     app.listen(addr).await?;

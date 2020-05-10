@@ -25,6 +25,7 @@ http = "0.2.1"
 bytes = "0.5.4"
 tokio = "0.2.20"
 cacache = "7.0.0"
+base64 = "0.12.1"
 
 [dependencies.async-std]
 version = "1.5.0"
