@@ -6,12 +6,14 @@ use rusoto_s3::S3Client;
 
 use chrono::Duration;
 
-use crate::middleware::{ Logging, SimpleBearerStorage, SimpleBasicStorage, Authentication, BasicAuthScheme, BearerAuthScheme };
+use crate::middleware::{ Logging, Authentication };
+use crate::auth::{ SimpleBearerStorage, SimpleBasicStorage, BasicAuthScheme, BearerAuthScheme };
 use crate::stores::{ RemoteStore, RedisReader, S3Store, ReadThrough, CacacheStore };
 use crate::rusoto_surf::SurfRequestDispatcher;
 use crate::app::package_read_routes;
 
 mod app;
+mod auth;
 mod handlers;
 mod middleware;
 mod packument;
