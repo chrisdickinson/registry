@@ -1,6 +1,4 @@
 #![feature(async_closure)]
-#![feature(type_alias_impl_trait)]
-#![feature(specialization)]
 use std::env;
 use tracing::{info, span, Level};
 use rusoto_credential::EnvironmentProvider;
@@ -8,8 +6,10 @@ use rusoto_s3::S3Client;
 
 use chrono::Duration;
 
+use crate::middleware::{ Logging, SimpleBearerStorage, SimpleBasicStorage, Authentication, BasicAuthScheme, BearerAuthScheme };
 use crate::stores::{ RemoteStore, RedisReader, S3Store, ReadThrough, CacacheStore };
 use crate::rusoto_surf::SurfRequestDispatcher;
+use crate::app::package_read_routes;
 
 mod app;
 mod handlers;
@@ -40,8 +40,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         rusoto_core::Region::default()
     );
 
-    use crate::middleware::SimpleBearerStorage;
-    use crate::middleware::SimpleBasicStorage;
     let store = ReadThrough::new(
         RedisReader::new(
             redis_url,
@@ -54,20 +52,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
     );
 
-    let unit = ();
-    let auth = (unit, (SimpleBearerStorage::default(), SimpleBasicStorage::default()));
 
-    use crate::app::package_read_routes;
+    let auth_stores = (SimpleBearerStorage::default(), SimpleBasicStorage::default());
+    let mut app = tide::with_state(auth_stores);
 
     // json_logger::init("anything", log::LevelFilter::Info).unwrap();
     simple_logger::init_with_level(log::Level::Info).unwrap();
-    let mut app = tide::with_state(auth);
-    app.middleware(middleware::Logging::new());
-    app.middleware(middleware::Authentication::new(middleware::BasicAuthScheme::default()));
-    app.middleware(middleware::Authentication::new(middleware::BearerAuthScheme::default()));
+    app.middleware(Logging::new());
 
-
-    //app.middleware(middleware::BearerAuthScheme::default());
+    app.middleware(Authentication::new(BasicAuthScheme::default()));
+    app.middleware(Authentication::new(BearerAuthScheme::default()));
 
     let _span = span!(Level::INFO, "server started");
 
