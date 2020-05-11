@@ -41,7 +41,7 @@ impl<User: Send + Sync + 'static, Scheme: AuthnScheme<User>> Authentication<User
 
 impl<Scheme, State, User> Middleware<State> for Authentication<User, Scheme>
     where Scheme: AuthnScheme<User> + Send + Sync + 'static,
-          State: AuthnStorage<User> + Send + Sync + 'static,
+          State: AuthnStorage<User, Scheme::Request> + Send + Sync + 'static,
           User: Send + Sync + 'static {
     fn handle<'a>(
         &'a self,

@@ -7,7 +7,7 @@ use rusoto_s3::S3Client;
 use chrono::Duration;
 
 use crate::middleware::{ Logging, Authentication };
-use crate::auth::{ SimpleBearerStorage, SimpleBasicStorage, BasicAuthScheme, BearerAuthScheme };
+use crate::auth::{ BasicAuthScheme, BearerAuthScheme };
 use crate::stores::{ RemoteStore, RedisReader, S3Store, ReadThrough, CacacheStore };
 use crate::rusoto_surf::SurfRequestDispatcher;
 use crate::app::package_read_routes;
@@ -19,6 +19,36 @@ mod middleware;
 mod packument;
 mod stores;
 mod rusoto_surf;
+
+pub struct User {
+    pub(crate) username: String,
+    pub(crate) email: String
+}
+
+struct RegistryState {}
+
+#[async_trait::async_trait]
+impl auth::AuthnStorage<User, auth::BasicAuthRequest> for RegistryState {
+    async fn get_user(&self, request: auth::BasicAuthRequest) -> http_types::Result<Option<User>> {
+        // Lest you worry, this is a fake password.
+        if request.username == "chris" && request.password == "applecat1" { 
+            Ok(Some(User { username: "chris".to_owned(), email: "chris@neversaw.us".to_owned() }))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl auth::AuthnStorage<User, auth::BearerAuthRequest> for RegistryState {
+    async fn get_user(&self, request: auth::BearerAuthRequest) -> http_types::Result<Option<User>> {
+        if request.token == "r_9e768f7a-8ab3-4c15-81ea-34a37e29b215" {
+            Ok(Some(User { username: "chris".to_owned(), email: "chris@neversaw.us".to_owned() }))
+        } else {
+            Ok(None)
+        }
+    }
+}
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -55,8 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
 
-    let auth_stores = (SimpleBearerStorage::default(), ((), SimpleBasicStorage::default()));
-    let mut app = tide::with_state(auth_stores);
+    let mut app = tide::with_state(RegistryState {});
 
     // json_logger::init("anything", log::LevelFilter::Info).unwrap();
     simple_logger::init_with_level(log::Level::Info).unwrap();

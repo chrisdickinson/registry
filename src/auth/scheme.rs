@@ -7,7 +7,7 @@ pub trait AuthnScheme<User: Send + Sync + 'static> {
     type Request: Any + Send + Sync;
 
     async fn authenticate<S>(&self, state: &S, auth_param: &str) -> Result<Option<User>>
-        where S: AuthnStorage<User> + Send + Sync + 'static;
+        where S: AuthnStorage<User, Self::Request> + Send + Sync + 'static;
 
     fn header_name() -> &'static str { "Authorization" }
     fn scheme_name() -> &'static str;
@@ -27,7 +27,7 @@ impl<User: Send + Sync + 'static> AuthnScheme<User> for BasicAuthScheme {
     type Request = BasicAuthRequest;
 
     async fn authenticate<S>(&self, state: &S, auth_param: &str) -> Result<Option<User>>
-        where S: AuthnStorage<User> + Send + Sync + 'static {
+        where S: AuthnStorage<User, Self::Request> + Send + Sync + 'static {
         let bytes = base64::decode(auth_param);
         if bytes.is_err() {
             // This is invalid. Fail the request.
@@ -41,7 +41,7 @@ impl<User: Send + Sync + 'static> AuthnScheme<User> for BasicAuthScheme {
         }
 
         let as_utf8 = as_utf8.unwrap();
-        let parts: Vec<_> = as_utf8.split(":").collect();
+        let parts: Vec<_> = as_utf8.split(':').collect();
 
         if parts.len() < 2 {
             return Ok(None)
@@ -49,10 +49,10 @@ impl<User: Send + Sync + 'static> AuthnScheme<User> for BasicAuthScheme {
 
         let (username, password) = (parts[0], parts[1]);
 
-        let user = state.maybe_get_user(Box::new(BasicAuthRequest {
+        let user = state.get_user(BasicAuthRequest {
             username: username.to_owned(),
             password: password.to_owned()
-        })).await?;
+        }).await?;
 
         Ok(user)
     }
@@ -74,18 +74,16 @@ impl<User: Send + Sync + 'static> AuthnScheme<User> for BearerAuthScheme {
     type Request = BearerAuthRequest;
 
     async fn authenticate<S>(&self, state: &S, auth_param: &str) -> Result<Option<User>>
-        where S: AuthnStorage<User> + Send + Sync + 'static {
+        where S: AuthnStorage<User, Self::Request> + Send + Sync + 'static {
 
         if !auth_param.starts_with(self.prefix.as_str()) {
             return Ok(None)
         }
 
-        // validate that the auth_param (sans the prefix) is a valid uuid.
-
-        // fetch the user from ... somewhere?
-        let user = state.maybe_get_user(Box::new(BearerAuthRequest {
+        // TODO: validate that the auth_param (sans the prefix) is a valid uuid.
+        let user = state.get_user(BearerAuthRequest {
             token: (&auth_param[self.prefix.len()..]).to_owned()
-        })).await?;
+        }).await?;
         Ok(user)
     }
 
