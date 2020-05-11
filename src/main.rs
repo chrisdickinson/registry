@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
 
-    let auth_stores = (SimpleBearerStorage::default(), SimpleBasicStorage::default());
+    let auth_stores = (SimpleBearerStorage::default(), ((), SimpleBasicStorage::default()));
     let mut app = tide::with_state(auth_stores);
 
     // json_logger::init("anything", log::LevelFilter::Info).unwrap();

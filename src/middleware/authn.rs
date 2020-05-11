@@ -9,26 +9,60 @@ pub struct User {
     pub(crate) email: String
 }
 
+/// A storage provider. It must define an associated `Request` type, representing
+/// a struct or parameter sent by a corresponding `Scheme`.
 #[async_trait::async_trait]
 pub trait AuthnStorage {
     type Request: Any + Send + Sync + 'static;
 
-    async fn get_user(&self, request: Box<dyn Any + Send + Sync + 'static>) -> Result<Option<User>>;
+    #[doc(hidden)]
+    async fn maybe_get_user(&self, request: Box<dyn Any + Send + Sync + 'static>) -> Result<Option<User>> {
+        match (request as Box<dyn Any + Send + 'static>).downcast::<Self::Request>() {
+            Ok(boxed) => self.get_user(*boxed).await,
+            Err(_) => Ok(None)
+        }
+    }
+
+    async fn get_user(&self, request: Self::Request) -> Result<Option<User>> {
+        Ok(None)
+    }
 }
 
+#[async_trait::async_trait]
+impl AuthnStorage for () {
+    type Request = ();
 
+    async fn get_user(&self, request: ()) -> Result<Option<User>> {
+        Ok(None)
+    }
+}
+
+/// Support nested tuples as an authentication store, e.g.,:
+/// ```no_run
+/// let state = (
+///     BasicStorage, (
+///         BearerStorage,
+///         SomeOtherStorage
+///     )
+/// );
+/// let app = tide::with_state(state);
+/// ```
 #[async_trait::async_trait]
 impl<LHS, RHS> AuthnStorage for (LHS, RHS)
     where LHS: AuthnStorage + Send + Sync,
           RHS: AuthnStorage + Send + Sync {
     type Request = Box<dyn Any + Send + Sync + 'static>;
 
-    async fn get_user(&self, request: Box<dyn Any + Send + Sync + 'static>) -> Result<Option<User>> {
+    async fn maybe_get_user(&self, request: Box<dyn Any + Send + Sync + 'static>) -> Result<Option<User>> {
         if request.is::<LHS::Request>() {
-            return self.0.get_user(request).await;
+            self.0.maybe_get_user(request).await
+        } else {
+            self.1.maybe_get_user(request).await
         }
+    }
 
-        self.1.get_user(request).await
+    async fn get_user(&self, request: Self::Request) -> Result<Option<User>> {
+        Ok(None)
     }
 }
 
@@ -39,16 +73,12 @@ pub struct SimpleBasicStorage;
 impl AuthnStorage for SimpleBasicStorage {
     type Request = BasicAuthRequest;
 
-    async fn get_user(&self, request: Box<dyn Any + Send + Sync + 'static>) -> Result<Option<User>> {
-        match request.downcast_ref::<Self::Request>() {
-            Some(req) => {
-                if req.username == "chris" && req.password == "applecat1" { 
-                    Ok(Some(User { username: "chris".to_owned(), email: "chris@neversaw.us".to_owned() }))
-                } else {
-                    Ok(None)
-                }
-            }
-            None => Ok(None)
+    async fn get_user(&self, request: Self::Request) -> Result<Option<User>> {
+        // Lest you worry, this is a fake password.
+        if request.username == "chris" && request.password == "applecat1" { 
+            Ok(Some(User { username: "chris".to_owned(), email: "chris@neversaw.us".to_owned() }))
+        } else {
+            Ok(None)
         }
     }
 }
@@ -60,16 +90,13 @@ pub struct SimpleBearerStorage;
 impl AuthnStorage for SimpleBearerStorage {
     type Request = BearerAuthRequest;
 
-    async fn get_user(&self, request: Box<dyn Any + Send + Sync + 'static>) -> Result<Option<User>> {
-        match request.downcast_ref::<Self::Request>() {
-            Some(req) => {
-                if req.token == "r_9e768f7a-8ab3-4c15-81ea-34a37e29b215" {
-                    Ok(Some(User { username: "chris".to_owned(), email: "chris@neversaw.us".to_owned() }))
-                } else {
-                    Ok(None)
-                }
-            }
-            None => Ok(None)
+    async fn get_user(&self, request: Self::Request) -> Result<Option<User>> {
+        // Again, don't worry, I generated this UUID just for the purposes of testing
+        // this program.
+        if request.token == "r_9e768f7a-8ab3-4c15-81ea-34a37e29b215" {
+            Ok(Some(User { username: "chris".to_owned(), email: "chris@neversaw.us".to_owned() }))
+        } else {
+            Ok(None)
         }
     }
 }
@@ -121,10 +148,10 @@ impl AuthnScheme for BasicAuthScheme {
 
         let (username, password) = (parts[0], parts[1]);
 
-        let user = state.get_user(Box::new(BasicAuthRequest {
+        let user = state.maybe_get_user(Box::new(BasicAuthRequest {
             username: username.to_owned(),
             password: password.to_owned()
-        }) as Box<_>).await?;
+        })).await?;
 
         Ok(user)
     }
@@ -155,7 +182,7 @@ impl AuthnScheme for BearerAuthScheme {
         // validate that the auth_param (sans the prefix) is a valid uuid.
 
         // fetch the user from ... somewhere?
-        let user = state.get_user(Box::new(BearerAuthRequest {
+        let user = state.maybe_get_user(Box::new(BearerAuthRequest {
             token: (&auth_param[self.prefix.len()..]).to_owned()
         })).await?;
         Ok(user)
