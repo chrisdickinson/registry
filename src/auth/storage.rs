@@ -6,7 +6,7 @@ use std::any::Any;
 /// A storage provider. It must define an associated `Request` type, representing
 /// a struct or parameter sent by a corresponding `Scheme`.
 #[async_trait::async_trait]
-pub trait AuthnStorage {
+pub trait AuthnStorage<User: Send + Sync + 'static> {
     type Request: Any + Send + Sync + 'static;
 
     #[doc(hidden)]
@@ -17,16 +17,16 @@ pub trait AuthnStorage {
         }
     }
 
-    async fn get_user(&self, request: Self::Request) -> Result<Option<User>> {
+    async fn get_user(&self, _request: Self::Request) -> Result<Option<User>> {
         Ok(None)
     }
 }
 
 #[async_trait::async_trait]
-impl AuthnStorage for () {
+impl<User: Send + Sync + 'static> AuthnStorage<User> for () {
     type Request = ();
 
-    async fn get_user(&self, request: ()) -> Result<Option<User>> {
+    async fn get_user(&self, _request: ()) -> Result<Option<User>> {
         Ok(None)
     }
 }
@@ -42,9 +42,10 @@ impl AuthnStorage for () {
 /// let app = tide::with_state(state);
 /// ```
 #[async_trait::async_trait]
-impl<LHS, RHS> AuthnStorage for (LHS, RHS)
-    where LHS: AuthnStorage + Send + Sync,
-          RHS: AuthnStorage + Send + Sync {
+impl<LHS, RHS, User> AuthnStorage<User> for (LHS, RHS)
+    where LHS: AuthnStorage<User> + Send + Sync,
+          RHS: AuthnStorage<User> + Send + Sync,
+          User: Send + Sync + 'static {
     type Request = Box<dyn Any + Send + Sync + 'static>;
 
     async fn maybe_get_user(&self, request: Box<dyn Any + Send + Sync + 'static>) -> Result<Option<User>> {
@@ -64,7 +65,7 @@ impl<LHS, RHS> AuthnStorage for (LHS, RHS)
 pub struct SimpleBasicStorage;
 
 #[async_trait::async_trait]
-impl AuthnStorage for SimpleBasicStorage {
+impl AuthnStorage<User> for SimpleBasicStorage {
     type Request = BasicAuthRequest;
 
     async fn get_user(&self, request: Self::Request) -> Result<Option<User>> {
@@ -81,7 +82,7 @@ impl AuthnStorage for SimpleBasicStorage {
 pub struct SimpleBearerStorage;
 
 #[async_trait::async_trait]
-impl AuthnStorage for SimpleBearerStorage {
+impl AuthnStorage<User> for SimpleBearerStorage {
     type Request = BearerAuthRequest;
 
     async fn get_user(&self, request: Self::Request) -> Result<Option<User>> {

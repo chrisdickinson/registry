@@ -3,27 +3,30 @@ use http_types::{ StatusCode, Result };
 use futures::future::BoxFuture;
 use tracing::{info, error};
 use crate::auth::{ AuthnScheme, AuthnStorage };
+use std::marker::PhantomData;
 
 // this is the middleware!
-pub struct Authentication<T: AuthnScheme> {
-    pub(crate) scheme: T,
+pub struct Authentication<User: Send + Sync + 'static, Scheme: AuthnScheme<User>> {
+    pub(crate) scheme: Scheme,
     header_name: http_types::headers::HeaderName,
+    _user_t: PhantomData<User>
 }
 
-impl<T: AuthnScheme> std::fmt::Debug for Authentication<T> {
+impl<User: Send + Sync + 'static, Scheme: AuthnScheme<User>> std::fmt::Debug for Authentication<User, Scheme> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(formatter, "Authentication<Scheme>")?;
         Ok(())
     }
 }
 
-impl<T: AuthnScheme> Authentication<T> {
-    pub fn new(scheme: T) -> Self {
+impl<User: Send + Sync + 'static, Scheme: AuthnScheme<User>> Authentication<User, Scheme> {
+    pub fn new(scheme: Scheme) -> Self {
         Self {
             scheme,
 
             // XXX: parse this once, at instantiation of the middleware
-            header_name: T::header_name().parse().unwrap(),
+            header_name: Scheme::header_name().parse().unwrap(),
+            _user_t: PhantomData::default()
         }
     }
 
@@ -32,13 +35,14 @@ impl<T: AuthnScheme> Authentication<T> {
     }
 
     fn scheme_name(&self) -> &str {
-        T::scheme_name()
+        Scheme::scheme_name()
     }
 }
 
-impl<Scheme, State> Middleware<State> for Authentication<Scheme> 
-    where Scheme: AuthnScheme + Send + Sync + 'static,
-          State: AuthnStorage + Send + Sync + 'static {
+impl<Scheme, State, User> Middleware<State> for Authentication<User, Scheme>
+    where Scheme: AuthnScheme<User> + Send + Sync + 'static,
+          State: AuthnStorage<User> + Send + Sync + 'static,
+          User: Send + Sync + 'static {
     fn handle<'a>(
         &'a self,
         mut cx: Request<State>,

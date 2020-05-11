@@ -1,14 +1,13 @@
 use http_types::{ StatusCode, Result };
 use std::any::Any;
 use crate::auth::storage::AuthnStorage;
-use crate::auth::User;
 
 #[async_trait::async_trait]
-pub trait AuthnScheme {
+pub trait AuthnScheme<User: Send + Sync + 'static> {
     type Request: Any + Send + Sync;
 
     async fn authenticate<S>(&self, state: &S, auth_param: &str) -> Result<Option<User>>
-        where S: AuthnStorage + Send + Sync + 'static;
+        where S: AuthnStorage<User> + Send + Sync + 'static;
 
     fn header_name() -> &'static str { "Authorization" }
     fn scheme_name() -> &'static str;
@@ -24,11 +23,11 @@ pub struct BasicAuthRequest {
 }
 
 #[async_trait::async_trait]
-impl AuthnScheme for BasicAuthScheme {
+impl<User: Send + Sync + 'static> AuthnScheme<User> for BasicAuthScheme {
     type Request = BasicAuthRequest;
 
     async fn authenticate<S>(&self, state: &S, auth_param: &str) -> Result<Option<User>>
-        where S: AuthnStorage + Send + Sync + 'static {
+        where S: AuthnStorage<User> + Send + Sync + 'static {
         let bytes = base64::decode(auth_param);
         if bytes.is_err() {
             // This is invalid. Fail the request.
@@ -71,11 +70,11 @@ pub struct BearerAuthRequest {
 }
 
 #[async_trait::async_trait]
-impl AuthnScheme for BearerAuthScheme {
+impl<User: Send + Sync + 'static> AuthnScheme<User> for BearerAuthScheme {
     type Request = BearerAuthRequest;
 
     async fn authenticate<S>(&self, state: &S, auth_param: &str) -> Result<Option<User>>
-        where S: AuthnStorage + Send + Sync + 'static {
+        where S: AuthnStorage<User> + Send + Sync + 'static {
 
         if !auth_param.starts_with(self.prefix.as_str()) {
             return Ok(None)
