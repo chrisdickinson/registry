@@ -15,7 +15,7 @@ pub struct RedisReader {
 }
 
 impl RedisReader {
-    pub async fn new<T: AsRef<str>>(redis_url: T, store_for: Duration) -> anyhow::Result<Self> {
+    pub async fn new<T: AsRef<str>>(redis_url: T, store_for: Duration) -> anyhow::Result<RedisReader> {
         let redis_str = redis_url.as_ref();
         let client = redis::Client::open(redis_str)?;
 

@@ -50,8 +50,13 @@ impl auth::AuthnStorage<User, auth::BearerAuthRequest> for RegistryState {
     }
 }
 
-#[async_std::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    smol::run(async {
+        handle().await
+    })
+}
+
+async fn handle() -> Result<(), Box<dyn std::error::Error>> {
     let port = env::var("PORT").ok().unwrap_or_else(|| "8080".to_string());
     let host = env::var("HOST")
         .ok()
@@ -60,17 +65,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let remote_url = env::var("REMOTE_URL").ok().unwrap_or_else(|| "https://registry.npmjs.org".to_string());
     let redis_url = env::var("REDIS_URL").ok().unwrap_or_else(|| "redis://localhost:6379/".to_string());
     let s3_bucket = env::var("S3_BUCKET").ok().unwrap_or_else(|| "www.neversaw.us".to_string());
+    let aws_region = env::var("AWS_DEFAULT_REGION").ok().or_else(|| Some("us-west-2".to_string())).map(|xs| {
+        xs.parse().ok()
+    }).unwrap().expect("Expected a valid AWS region");
 
     let store = RemoteStore::new(
         &addr,
         &remote_url
     );
 
-    let client = S3Client::new_with(
-        SurfRequestDispatcher::new(),
-        EnvironmentProvider::default(),
-        rusoto_core::Region::default()
-    );
+    let client = S3Client::new(aws_region);
 
     let store = ReadThrough::new(
         RedisReader::new(
@@ -79,8 +83,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ).await?,
         ReadThrough::new(
             CacacheStore::new("./.cache"),
-            // S3Store::new(s3_bucket, client),
-            store
+            S3Store::new(s3_bucket, client),
+            // store
         )
     );
 

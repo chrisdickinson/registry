@@ -23,12 +23,14 @@ url = "2.1.1"
 redis = { git = "https://github.com/mitsuhiko/redis-rs" }
 http = "0.2.1"
 bytes = "0.5.4"
-tokio = "0.2.20"
+tokio = "0.2.21"
 cacache = "7.0.0"
 base64 = "0.12.1"
+smol = { version = "0.1.1", features = ["tokio02"] }
 
 [dependencies.async-std]
-version = "1.5.0"
+rev = "v1.6.0-beta.1"
+git = "https://github.com/async-rs/async-std"
 features = ["attributes"]
 
 [dependencies.rusoto_core]
