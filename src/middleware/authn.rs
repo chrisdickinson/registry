@@ -55,7 +55,7 @@ impl<Scheme, State, User> Middleware<State> for Authentication<User, Scheme>
                 info!("no auth header, proceeding");
                 return next.run(cx).await;
             }
-            let value = auth_header.unwrap();
+            let value: Vec<_> = auth_header.unwrap().iter().collect();
 
             if value.is_empty() {
                 info!("empty auth header, proceeding");
@@ -83,7 +83,7 @@ impl<Scheme, State, User> Middleware<State> for Authentication<User, Scheme>
             let maybe_user = self.scheme.authenticate(state, auth_param).await?;
 
             if let Some(user) = maybe_user {
-                cx = cx.set_local(user);
+                cx = cx.set_ext(user);
             } else {
                 error!("Authorization header sent but no user returned, bailing");
                 return Ok(Response::new(StatusCode::Unauthorized));

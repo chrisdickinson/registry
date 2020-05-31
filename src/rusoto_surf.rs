@@ -148,8 +148,9 @@ impl DispatchSignedRequest for SurfRequestDispatcher {
                     headers.insert(http::header::HeaderName::from_bytes(name.as_bytes()).unwrap(), value);
                 }
 
+                let status = http::status::StatusCode::from_u16(response.status().into()).unwrap();
                 Ok(HttpResponse {
-                    status: response.status().into(),
+                    status,
                     headers,
                     body: ByteStream::new(Streamer::new(response)),
                 })
