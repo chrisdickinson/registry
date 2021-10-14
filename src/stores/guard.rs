@@ -8,6 +8,7 @@ pub struct GuardStore<F: Fn(&str) -> bool, R: ReadableStore> {
     test: F
 }
 
+#[allow(dead_code)]
 impl<F: Fn(&str) -> bool, R: ReadableStore> GuardStore<F, R> {
     pub fn new(inner: R, test: F) -> Self {
         GuardStore {

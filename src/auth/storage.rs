@@ -1,4 +1,3 @@
-use crate::auth::{ BasicAuthRequest, BearerAuthRequest };
 use http_types::Result; 
 use std::any::Any;
 

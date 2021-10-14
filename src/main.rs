@@ -7,7 +7,7 @@ use chrono::Duration;
 
 use crate::middleware::{ Logging, Authentication };
 use crate::auth::{ BasicAuthScheme, BearerAuthScheme };
-use crate::stores::{ RemoteStore, RedisReader, ReadThrough, CacacheStore };
+use crate::stores::{CacacheStore, ReadThrough, RedisReader, RemoteStore, S3Store};
 use crate::rusoto_surf::SurfRequestDispatcher;
 use crate::app::package_read_routes;
 
@@ -19,6 +19,7 @@ mod packument;
 mod stores;
 mod rusoto_surf;
 
+#[allow(dead_code)]
 pub struct User {
     pub(crate) username: String,
     pub(crate) email: String
@@ -58,18 +59,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = format!("{}:{}", host, port);
     let remote_url = env::var("REMOTE_URL").ok().unwrap_or_else(|| "https://registry.npmjs.org".to_string());
     let redis_url = env::var("REDIS_URL").ok().unwrap_or_else(|| "redis://localhost:6379/".to_string());
-    let s3_bucket = env::var("S3_BUCKET").ok().unwrap_or_else(|| "www.neversaw.us".to_string());
 
     let store = RemoteStore::new(
         &addr,
         &remote_url
     );
 
+    let s3_bucket = env::var("S3_BUCKET").ok().unwrap_or_else(|| "www.neversaw.us".to_string());
     let client = S3Client::new_with(
         SurfRequestDispatcher::new(),
         EnvironmentProvider::default(),
         rusoto_core::Region::default()
     );
+    let _s3_store = S3Store::new(s3_bucket, client);
 
     let store = ReadThrough::new(
         RedisReader::new(
@@ -78,16 +80,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ).await?,
         ReadThrough::new(
             CacacheStore::new("./.cache"),
-            // S3Store::new(s3_bucket, client),
             store
         )
     );
 
-
     let mut app = tide::with_state(RegistryState {});
 
-    // json_logger::init("anything", log::LevelFilter::Info).unwrap();
-    simple_logger::init_with_level(log::Level::Info).unwrap();
+    if env::var("ENVIRONMENT").ok().unwrap_or_else(String::new) == "production" {
+        json_logger::init("anything", log::LevelFilter::Info).unwrap();
+    } else {
+        simple_logger::init_with_level(log::Level::Info).unwrap();
+    }
     app.middleware(Logging::new());
 
     app.middleware(Authentication::new(BasicAuthScheme::default()));
@@ -95,11 +98,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let _span = span!(Level::INFO, "server started");
 
-    let app = package_read_routes(app, store);
-    // app.at("/-/v1/login").post(handlers::post_login);
+    let mut app = package_read_routes(app, store);
+    app.at("/-/v1/login").post(handlers::post_login);
 
-    // app.at("/-/v1/login/poll/:session")
-    //    .get(handlers::get_login_poll);
+    app.at("/-/v1/login/poll/:session")
+       .get(handlers::get_login_poll);
 
     info!("server listening on address {}", &addr);
     app.listen(addr).await?;

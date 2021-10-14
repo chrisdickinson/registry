@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use std::marker::Unpin;
 use http_types::Result;
 use chrono::{ offset::TimeZone, Utc };
-use tracing::info;
 
 pub struct CacacheStore {
     cache: String
@@ -20,7 +19,7 @@ impl CacacheStore {
 
 #[async_trait]
 impl WritableStore for CacacheStore {
-    async fn write_packument<T, W>(&self, package: T, packument_reader: W, meta: PackageMetadata) -> Result<Option<bool>>
+    async fn write_packument<T, W>(&self, package: T, packument_reader: W, _meta: PackageMetadata) -> Result<Option<bool>>
         where T: AsRef<str> + Send + Sync,
               W: AsyncBufRead + Send + Sync + Unpin + 'static {
 
@@ -39,7 +38,7 @@ impl WritableStore for CacacheStore {
         package: T,
         version: S,
         tarball_reader: W,
-        meta: PackageMetadata
+        _meta: PackageMetadata
     ) -> Result<Option<bool>>
     where
         T: AsRef<str> + Send + Sync,
@@ -100,8 +99,7 @@ impl ReadableStore for CacacheStore {
 
 impl From<cacache::Metadata> for PackageMetadata {
     fn from(meta: cacache::Metadata) -> PackageMetadata {
-        let seconds = dbg!(meta.time / 1000);
-        let nanoseconds = dbg!((meta.time - seconds) * 1000000);
+        let seconds = meta.time / 1000;
 
         PackageMetadata {
             integrity: meta.integrity.to_string(),

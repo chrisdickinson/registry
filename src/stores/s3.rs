@@ -1,15 +1,10 @@
 use rusoto_core::RusotoError;
 use rusoto_s3::{
-    GetObjectOutput,
     GetObjectRequest,
     GetObjectError,
-    HeadObjectOutput,
     HeadObjectRequest,
     HeadObjectError,
-    PutObjectOutput,
-    PutObjectRequest,
-    PutObjectError,
-    S3
+    PutObjectRequest
 };
 use futures::io::AsyncBufRead;
 use async_trait::async_trait;
