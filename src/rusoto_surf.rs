@@ -130,7 +130,7 @@ impl DispatchSignedRequest for SurfRequestDispatcher {
         let response_fut = surf_req(request);
 
         let result = response_fut
-            .then(async move |result| {
+            .then(|result| async move {
                 let response = match result {
                     Ok(x) => x,
                     Err(e) => {

@@ -1,4 +1,3 @@
-#![feature(async_closure)]
 use std::env;
 use tracing::{info, span, Level};
 use rusoto_credential::EnvironmentProvider;
@@ -8,7 +7,7 @@ use chrono::Duration;
 
 use crate::middleware::{ Logging, Authentication };
 use crate::auth::{ BasicAuthScheme, BearerAuthScheme };
-use crate::stores::{ RemoteStore, RedisReader, S3Store, ReadThrough, CacacheStore };
+use crate::stores::{ RemoteStore, RedisReader, ReadThrough, CacacheStore };
 use crate::rusoto_surf::SurfRequestDispatcher;
 use crate::app::package_read_routes;
 
