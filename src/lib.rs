@@ -1,3 +1,3 @@
-mod handlers;
+pub mod handlers;
 mod models;
 mod operations;
