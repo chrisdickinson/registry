@@ -63,13 +63,13 @@ pub enum PackageModification {
 impl PackageModification {
     pub(crate) fn from_diff(old: Packument, new: Packument) -> anyhow::Result<Self> {
         if let Some((old_stargazers, new_stargazers)) = old.stargazers.zip(new.stargazers) {
-            let old_stargazers: HashSet<_> = old_stargazers.keys().into_iter().map(String::as_str).collect();
-            let new_stargazers: HashSet<_> = new_stargazers.keys().into_iter().map(String::as_str).collect();
+            let old_stargazers: HashSet<_> = old_stargazers.keys().map(String::as_str).collect();
+            let new_stargazers: HashSet<_> = new_stargazers.keys().map(String::as_str).collect();
 
             if old_stargazers != new_stargazers {
                 let mut removed: Vec<&str> = old_stargazers
                     .difference(&new_stargazers)
-                    .map(|&xs| xs)
+                    .copied()
                     .collect();
 
                 if !removed.is_empty() {
@@ -82,7 +82,7 @@ impl PackageModification {
 
                 let mut added: Vec<&str> = new_stargazers
                     .difference(&old_stargazers)
-                    .map(|&xs| xs)
+                    .copied()
                     .collect();
 
                 if !added.is_empty() {

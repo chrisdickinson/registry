@@ -2,7 +2,7 @@ use std::net::TcpListener;
 
 use listenfd::ListenFd;
 use registry::handlers::v1;
-use registry::stores::RemoteRegistry;
+use registry::stores::{ReadThrough, RemoteRegistry};
 
 fn setup_tracing() {
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -40,6 +40,10 @@ async fn main() -> anyhow::Result<()> {
 
     setup_tracing();
     let state = RemoteRegistry::default();
+    let mut pb = std::env::current_dir()?;
+    pb.push("cache");
+
+    let state = ReadThrough::new(pb, state);
     let app = v1::routes(state);
 
     axum::Server::from_tcp(bind)?

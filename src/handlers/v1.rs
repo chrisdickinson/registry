@@ -110,7 +110,31 @@ where
 }
 
 #[instrument]
-async fn get_scoped_tarball() -> impl IntoResponse {}
+async fn get_scoped_tarball<Fetch>(
+    State(state): State<Fetch>,
+    Path((scope, pkg, tarball)): Path<(String, String, String)>,
+) -> Result<impl IntoResponse, StatusCode>
+where
+    Fetch: StreamTarball + std::fmt::Debug,
+{
+    let pkg = format!("@{}/{}", scope, pkg);
+    let pkg: PackageIdentifier = pkg.parse().unwrap();
+    if !tarball.starts_with(pkg.name.as_str())
+        || tarball.get(pkg.name.len()..pkg.name.len() + 1) != Some("-")
+        || !tarball.ends_with(".tgz")
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let version = tarball.get(pkg.name.len() + 1..tarball.len() - 4).unwrap();
+
+    let stream = state
+        .stream(&pkg, version)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StreamBody::new(stream))
+}
 
 #[instrument]
 async fn get_login_poll() -> impl IntoResponse {}
@@ -140,7 +164,7 @@ where
     <B as HttpBody>::Error: std::error::Error + 'static + Send + Sync,
 {
     Router::new()
-        .route("/@:scope/:pkg/-/*tarball", get(get_scoped_tarball))
+        .route("/@:scope/:pkg/-/*tarball", get(get_scoped_tarball::<S>))
         .route(
             "/@:scope/:pkg",
             get(get_scoped_packument::<S>).put(put_scoped_packument),
