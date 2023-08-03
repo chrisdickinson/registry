@@ -50,9 +50,11 @@ where
 
     let old_packument = state.fetch(&pkg).await.ok().unwrap_or(Default::default());
 
-    let Ok(_modification) = PackageModification::from_diff(old_packument, payload) else {
+    let Ok(modification) = PackageModification::from_diff(old_packument, payload) else {
         return Err(StatusCode::BAD_REQUEST)
     };
+
+    eprintln!("{:?}", modification);
 
     Ok(StatusCode::NOT_FOUND)
 }

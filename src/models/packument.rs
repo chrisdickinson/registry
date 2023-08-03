@@ -252,7 +252,7 @@ pub struct Packument {
     pub(crate) license: Option<License>,
 
     #[serde(rename = "users", skip_serializing_if = "Option::is_none")]
-    pub(crate) stargazers: Option<Vec<String>>,
+    pub(crate) stargazers: Option<HashMap<String, bool>>,
 
     #[serde(rename = "readmeFilename", skip_serializing_if = "Option::is_none")]
     pub(crate) readme_filename: Option<String>,
