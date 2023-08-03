@@ -1,3 +1,4 @@
 pub mod handlers;
-mod models;
+pub mod models;
 mod operations;
+pub mod stores;

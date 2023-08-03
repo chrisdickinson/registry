@@ -2,6 +2,7 @@ use std::net::TcpListener;
 
 use listenfd::ListenFd;
 use registry::handlers::v1;
+use registry::stores::RemoteRegistry;
 
 fn setup_tracing() {
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -38,7 +39,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     setup_tracing();
-    let app = v1::routes();
+    let state = RemoteRegistry::default();
+    let app = v1::routes(state);
 
     axum::Server::from_tcp(bind)?
         .serve(app.into_make_service())
