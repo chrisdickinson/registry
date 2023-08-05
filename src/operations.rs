@@ -1,11 +1,17 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::Display, hash::Hash, str::FromStr};
 
-use axum::body::Bytes;
+use axum::{
+    body::{Body, Bytes},
+    http::{request::Parts, Request},
+    response::IntoResponse,
+};
+use axum_extra::extract::cookie::Key;
 use futures::stream::BoxStream;
-use futures_util::StreamExt;
+use libflate::gzip::Decoder;
+use std::io::Cursor;
 use tar::Archive;
 
-use crate::models::{PackageIdentifier, Packument, PackumentVersion};
+use crate::models::{PackageIdentifier, Packument, PackumentVersion, User};
 
 // Chosen at random.
 const MAX_FILE_COUNT: usize = 16000;
@@ -14,30 +20,99 @@ const MAX_FILE_COUNT: usize = 16000;
 const MAX_UNPACKED_SIZE: usize = 1 << 30;
 
 #[async_trait::async_trait]
-pub trait FetchPackument {
-    async fn fetch(&self, name: &PackageIdentifier) -> anyhow::Result<Packument>;
-}
+pub trait PackageStorage: Send + Sync {
+    type Error: Into<axum::BoxError> + Send + Sync + 'static;
+    async fn fetch_packument(&self, name: &PackageIdentifier) -> anyhow::Result<Packument> {
+        let stream = self.stream_packument(name).await?;
+        use futures::TryStreamExt;
 
-#[async_trait::async_trait]
-pub trait StreamPackument {
-    type Error: Into<axum::BoxError> + 'static;
-    async fn stream(
+        let data: Vec<Bytes> = stream.try_collect().await.map_err(|e| {
+            let box_error: axum::BoxError = e.into();
+            anyhow::anyhow!(box_error)
+        })?;
+        let data = data.as_slice().concat();
+
+        Ok(serde_json::from_slice(data.as_slice())?)
+    }
+
+    async fn stream_packument(
         &self,
         name: &PackageIdentifier,
     ) -> anyhow::Result<BoxStream<'static, Result<Bytes, Self::Error>>>;
-}
 
-#[async_trait::async_trait]
-pub trait StreamTarball {
-    type Error: Into<axum::BoxError> + 'static;
-    async fn stream(
+    async fn stream_tarball(
         &self,
         name: &PackageIdentifier,
         version: &str,
     ) -> anyhow::Result<BoxStream<'static, Result<Bytes, Self::Error>>>;
 }
 
-#[derive(Debug)]
+#[async_trait::async_trait]
+pub trait TokenAuthorizer {
+    type TokenSessionId: Hash + FromStr + Display + Clone + Send + Sync;
+
+    async fn authenticate_session_bearer(
+        &self,
+        _bearer: Self::TokenSessionId,
+    ) -> anyhow::Result<Option<User>> {
+        Ok(None)
+    }
+
+    async fn start_session(&self, user: User) -> anyhow::Result<Self::TokenSessionId>;
+
+    async fn authenticate_session(&self, req: &Parts) -> anyhow::Result<Option<User>> {
+        let Some(authentication) = req.headers.get("authorization") else {
+            return Ok(None);
+        };
+
+        let Ok(authentication) = authentication.to_str() else {
+            return Ok(None);
+        };
+
+        let Some(authentication) = authentication.strip_prefix("Bearer ").or_else(|| authentication.strip_prefix("bearer ")) else {
+            return Ok(None);
+        };
+
+        let Ok(token): Result<Self::TokenSessionId, _> = authentication.trim().parse() else {
+            return Ok(None);
+        };
+
+        self.authenticate_session_bearer(token).await
+    }
+}
+
+#[async_trait::async_trait]
+pub trait Authenticator: Send + Sync {
+    type LoginSessionId: Hash + FromStr + Display + Clone + Send + Sync;
+    type LoginWWWResponse: IntoResponse + Send + Sync;
+
+    async fn start_login_session(&self, req: Request<Body>)
+        -> anyhow::Result<Self::LoginSessionId>;
+    async fn poll_login_session(
+        &self,
+        session: Self::LoginSessionId,
+    ) -> anyhow::Result<Option<User>>;
+    async fn complete_login_session<C: Configurator + Send + Sync>(
+        &self,
+        config: &C,
+        req: Request<Body>,
+        session: Option<Self::LoginSessionId>,
+    ) -> anyhow::Result<Self::LoginWWWResponse>;
+
+    async fn get_user(&self, _username: &str) -> anyhow::Result<Option<User>> {
+        Ok(None)
+    }
+}
+
+#[async_trait::async_trait]
+pub trait Configurator {
+    fn fqdn(&self) -> &str;
+
+    async fn oauth_config(&self) -> anyhow::Result<(String, String)>;
+    async fn cookie_key(&self) -> anyhow::Result<Key>;
+}
+
+#[derive(Clone, Debug)]
 pub enum PackageModification {
     AddStar(String),
     RemoveStar(String),
@@ -46,6 +121,7 @@ pub enum PackageModification {
         tag: String,
         version: String,
     },
+
     RemoveTag {
         tag: String,
     },
@@ -136,8 +212,6 @@ impl PackageModification {
                 // TODO: check times on old packument, make sure we aren't overwriting an old,
                 // deleted packument version
 
-                use libflate::gzip::Decoder;
-                use std::io::Cursor;
                 let mut r = Cursor::new(attachment.data.as_bytes());
                 let mut decoded = base64::read::DecoderReader::new(
                     &mut r,
@@ -191,6 +265,38 @@ impl PackageModification {
                     version: Box::new(version.clone()),
                     tarball: Some(debase64d),
                 });
+            }
+        }
+
+        if let Some((old_maintainers, new_maintainers)) = old.maintainers.zip(new.maintainers) {
+            let old_maintainers: HashSet<_> = old_maintainers
+                .iter()
+                .filter_map(|maint| maint.clone().into_object().name)
+                .collect();
+            let new_maintainers: HashSet<_> = new_maintainers
+                .iter()
+                .filter_map(|maint| maint.clone().into_object().name)
+                .collect();
+            if old_maintainers != new_maintainers {
+                let mut removed: Vec<_> = old_maintainers.difference(&new_maintainers).collect();
+
+                if !removed.is_empty() {
+                    if removed.len() > 1 {
+                        anyhow::bail!("Can only remove a single maintainer at a time")
+                    }
+
+                    return Ok(Self::RemoveMaintainer(removed.pop().unwrap().to_string()));
+                }
+
+                let mut added: Vec<_> = new_maintainers.difference(&old_maintainers).collect();
+
+                if !added.is_empty() {
+                    if added.len() > 1 {
+                        anyhow::bail!("Can only add a single maintainer at a time")
+                    }
+
+                    return Ok(Self::AddMaintainer(added.pop().unwrap().to_string()));
+                }
             }
         }
 

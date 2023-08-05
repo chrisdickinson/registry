@@ -82,18 +82,96 @@ impl FromStr for PackageIdentifier {
 // for common NPM objects.
 // [1]: https://github.com/npm/types/blob/7f357f45e2b4205cd8474339a95092a5e6e77917/index.d.ts
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Default)]
+pub struct MaintainerObject {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) url: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(untagged)]
 pub enum Maintainer {
     Byline(String),
-    Object {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        name: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        email: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        url: Option<String>,
-    },
+    Object(MaintainerObject),
+}
+
+use {once_cell::sync::Lazy, regex::Regex};
+
+impl Maintainer {
+    pub fn into_object(self) -> MaintainerObject {
+        static RE: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(r"(?<name>[^<(]+)\s*(<(?<email>[^>]+)>)?\s*(\((?<url>[^)]+)\))?").unwrap()
+        });
+
+        match self {
+            Maintainer::Object(o) => o,
+            Maintainer::Byline(s) => {
+                let Some(caps) = RE.captures(s.as_str()) else {
+                    return Default::default();
+                };
+
+                let name = caps.name("name").map(|xs| xs.as_str().trim().to_string());
+                let email = caps.name("email").map(|xs| xs.as_str().trim().to_string());
+                let url = caps.name("url").map(|xs| xs.as_str().trim().to_string());
+
+                MaintainerObject { name, email, url }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_maintainer_to_object() {
+        let m = Maintainer::Byline(
+            "homer j. simpson <homer@simpso.ns> (https://example.com)".to_string(),
+        );
+        assert_eq!(
+            m.into_object(),
+            MaintainerObject {
+                name: Some("homer j. simpson".to_string()),
+                email: Some("homer@simpso.ns".to_string()),
+                url: Some("https://example.com".to_string()),
+            }
+        );
+
+        let m = Maintainer::Byline("homer j. simpson (https://example.com)".to_string());
+        assert_eq!(
+            m.into_object(),
+            MaintainerObject {
+                name: Some("homer j. simpson".to_string()),
+                email: None,
+                url: Some("https://example.com".to_string()),
+            }
+        );
+
+        let m = Maintainer::Byline("homer j. simpson <homer@simpso.ns>".to_string());
+        assert_eq!(
+            m.into_object(),
+            MaintainerObject {
+                name: Some("homer j. simpson".to_string()),
+                email: Some("homer@simpso.ns".to_string()),
+                url: None,
+            }
+        );
+
+        let m = Maintainer::Byline("gary".to_string());
+        assert_eq!(
+            m.into_object(),
+            MaintainerObject {
+                name: Some("gary".to_string()),
+                email: None,
+                url: None,
+            }
+        );
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]

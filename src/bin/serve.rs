@@ -2,7 +2,9 @@ use std::net::TcpListener;
 
 use listenfd::ListenFd;
 use registry::handlers::v1;
-use registry::stores::{ReadThrough, RemoteRegistry};
+use registry::stores::{
+    InMemoryTokenAuthorizer, OAuthAuthenticator, Policy, ReadThrough, RemoteRegistry,
+};
 
 fn setup_tracing() {
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -31,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
             std::env::var("HOST")
                 .unwrap_or_else(|_| "127.0.0.1".to_string())
                 .as_str(),
-            std::env::var("POST")
+            std::env::var("PORT")
                 .ok()
                 .and_then(|port| port.parse::<u16>().ok())
                 .unwrap_or(8000),
@@ -39,12 +41,15 @@ async fn main() -> anyhow::Result<()> {
     };
 
     setup_tracing();
-    let state = RemoteRegistry::default();
+
     let mut pb = std::env::current_dir()?;
     pb.push("cache");
 
-    let state = ReadThrough::new(pb, state);
-    let app = v1::routes(state);
+    let policy = Policy::new()
+        .with_package_storage(ReadThrough::new(pb, RemoteRegistry::default()))
+        .with_authenticator(OAuthAuthenticator::for_github())
+        .with_token_authorizer(InMemoryTokenAuthorizer::new());
+    let app = v1::routes(policy);
 
     axum::Server::from_tcp(bind)?
         .serve(app.into_make_service())

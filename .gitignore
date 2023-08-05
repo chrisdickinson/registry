@@ -1,2 +1,4 @@
 /target
 cache
+crates/
+src/plugin.wasm
