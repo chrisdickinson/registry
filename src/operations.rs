@@ -112,6 +112,66 @@ pub trait Configurator {
     async fn cookie_key(&self) -> anyhow::Result<Key>;
 }
 
+pub(crate) trait NotImplemented: Send + Sync {}
+
+#[async_trait::async_trait]
+impl<T: NotImplemented> Authenticator for T {
+    type LoginSessionId = String;
+    type LoginWWWResponse = String;
+
+    async fn start_login_session(
+        &self,
+        _req: Request<Body>,
+    ) -> anyhow::Result<Self::LoginSessionId> {
+        Err(anyhow::anyhow!("not implemented"))
+    }
+
+    async fn poll_login_session(&self, _id: Self::LoginSessionId) -> anyhow::Result<Option<User>> {
+        Err(anyhow::anyhow!("not implemented"))
+    }
+
+    async fn complete_login_session<C: Configurator + Send + Sync>(
+        &self,
+        _config: &C,
+        _req: Request<Body>,
+        _id: Option<Self::LoginSessionId>,
+    ) -> anyhow::Result<Self::LoginWWWResponse> {
+        Err(anyhow::anyhow!("not implemented"))
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: NotImplemented> TokenAuthorizer for T {
+    type TokenSessionId = String;
+
+    async fn start_session(&self, _user: User) -> anyhow::Result<Self::TokenSessionId> {
+        Err(anyhow::anyhow!("not implemented"))
+    }
+
+    async fn authenticate_session(&self, _req: &Parts) -> anyhow::Result<Option<User>> {
+        Err(anyhow::anyhow!("not implemented"))
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: NotImplemented> PackageStorage for T {
+    type Error = anyhow::Error;
+    async fn stream_packument(
+        &self,
+        _name: &PackageIdentifier,
+    ) -> anyhow::Result<BoxStream<'static, Result<Bytes, Self::Error>>> {
+        Err(anyhow::anyhow!("not implemented"))
+    }
+
+    async fn stream_tarball(
+        &self,
+        _name: &PackageIdentifier,
+        _version: &str,
+    ) -> anyhow::Result<BoxStream<'static, Result<Bytes, Self::Error>>> {
+        Err(anyhow::anyhow!("not implemented"))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum PackageModification {
     AddStar(String),

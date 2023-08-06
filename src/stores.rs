@@ -30,6 +30,8 @@ use uuid::Uuid;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NotImplemented;
 
+impl crate::operations::NotImplemented for NotImplemented {}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Policy<
     AuthImpl = NotImplemented,
@@ -211,64 +213,6 @@ where
 
     async fn cookie_key(&self) -> anyhow::Result<Key> {
         self.configurator.cookie_key().await
-    }
-}
-
-#[async_trait::async_trait]
-impl Authenticator for NotImplemented {
-    type LoginSessionId = String;
-    type LoginWWWResponse = String;
-
-    async fn start_login_session(
-        &self,
-        _req: Request<Body>,
-    ) -> anyhow::Result<Self::LoginSessionId> {
-        Err(anyhow::anyhow!("not implemented"))
-    }
-
-    async fn poll_login_session(&self, _id: Self::LoginSessionId) -> anyhow::Result<Option<User>> {
-        Err(anyhow::anyhow!("not implemented"))
-    }
-
-    async fn complete_login_session<C: Configurator + Send + Sync>(
-        &self,
-        _config: &C,
-        _req: Request<Body>,
-        _id: Option<Self::LoginSessionId>,
-    ) -> anyhow::Result<Self::LoginWWWResponse> {
-        Err(anyhow::anyhow!("not implemented"))
-    }
-}
-
-#[async_trait::async_trait]
-impl TokenAuthorizer for NotImplemented {
-    type TokenSessionId = String;
-
-    async fn start_session(&self, _user: User) -> anyhow::Result<Self::TokenSessionId> {
-        Err(anyhow::anyhow!("not implemented"))
-    }
-
-    async fn authenticate_session(&self, _req: &Parts) -> anyhow::Result<Option<User>> {
-        Err(anyhow::anyhow!("not implemented"))
-    }
-}
-
-#[async_trait::async_trait]
-impl PackageStorage for NotImplemented {
-    type Error = anyhow::Error;
-    async fn stream_packument(
-        &self,
-        _name: &PackageIdentifier,
-    ) -> anyhow::Result<BoxStream<'static, Result<Bytes, Self::Error>>> {
-        Err(anyhow::anyhow!("not implemented"))
-    }
-
-    async fn stream_tarball(
-        &self,
-        _name: &PackageIdentifier,
-        _version: &str,
-    ) -> anyhow::Result<BoxStream<'static, Result<Bytes, Self::Error>>> {
-        Err(anyhow::anyhow!("not implemented"))
     }
 }
 
