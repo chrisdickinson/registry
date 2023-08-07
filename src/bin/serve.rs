@@ -2,14 +2,13 @@ use std::net::TcpListener;
 
 use listenfd::ListenFd;
 use registry::{
-    routes,
-    services::{
+    policy::{
         authenticators::OAuth,
         storage::package::{ReadThrough, RemoteRegistry},
         storage::user,
         token_authorizers,
     },
-    Policy,
+    routes, Policy,
 };
 
 fn setup_tracing() {

@@ -15,10 +15,8 @@ use tracing::{instrument, Level};
 
 use crate::extractors::Authenticated;
 use crate::models::{PackageIdentifier, PackageModification, Packument};
-use crate::operations::policy::PolicyHolder;
-use crate::operations::{
-    Authenticator, Configurator, PackageStorage, TokenAuthorizer, UserStorage,
-};
+use crate::policies::policy::PolicyHolder;
+use crate::policies::{Authenticator, Configurator, PackageStorage, TokenAuthorizer, UserStorage};
 
 #[instrument(level = "info", fields(pkg))]
 async fn get_packument<Storage>(

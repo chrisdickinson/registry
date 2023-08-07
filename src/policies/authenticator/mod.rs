@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 use crate::models::User;
-use crate::operations::Configurator;
+use crate::policies::Configurator;
 
 use super::UserStorage;
 

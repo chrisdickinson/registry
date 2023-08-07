@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::models::User;
-use crate::operations::TokenAuthorizer;
+use crate::policies::TokenAuthorizer;
 
 use chrono::Utc;
 

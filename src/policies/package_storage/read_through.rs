@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::models::PackageIdentifier;
-use crate::operations::PackageStorage;
+use crate::policies::PackageStorage;
 use axum::body::Bytes;
 use futures::stream::BoxStream;
 use futures_util::{pin_mut, StreamExt};

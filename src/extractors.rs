@@ -2,7 +2,7 @@ use axum::{extract::FromRequestParts, http::request::Parts, http::StatusCode, Js
 
 use crate::{
     models::User,
-    operations::{policy::PolicyHolder, TokenAuthorizer},
+    policies::{policy::PolicyHolder, TokenAuthorizer},
 };
 
 pub(crate) struct Authenticated(pub User);

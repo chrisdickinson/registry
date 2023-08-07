@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::models::User;
-use crate::operations::{Authenticator, Configurator, UserStorage};
+use crate::policies::{Authenticator, Configurator, UserStorage};
 use axum::body::Body;
 use axum::http::{HeaderMap, Request, StatusCode};
 use axum::{Json, RequestExt};
