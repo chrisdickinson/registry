@@ -14,10 +14,8 @@ use serde_json::json;
 use tracing::{instrument, Level};
 
 use crate::extractors::Authenticated;
-use crate::models::{PackageIdentifier, Packument};
-use crate::operations::{
-    Authenticator, Configurator, PackageModification, PackageStorage, TokenAuthorizer,
-};
+use crate::models::{PackageIdentifier, PackageModification, Packument};
+use crate::operations::{Authenticator, Configurator, PackageStorage, TokenAuthorizer};
 
 #[instrument(level = "info", fields(pkg))]
 async fn get_packument<Storage>(
@@ -150,7 +148,7 @@ async fn get_login_poll<Auth>(
 where
     Auth: Authenticator + TokenAuthorizer + std::fmt::Debug,
 {
-    let Ok(session) = session.parse::<<Auth as Authenticator>::LoginSessionId>() else {
+    let Ok(session) = session.parse::<<Auth as Authenticator>::SessionId>() else {
         todo!();
     };
 
@@ -161,7 +159,7 @@ where
     if let Some(user) = user {
         // TODO: this is the point at which we add them to UserStorage -- which is where
         // we may wish to apply WASM-based filtering of incoming users.
-        let Ok(token) = state.start_session(user).await else {
+        let Ok(token) = state.start_session(user.into()).await else {
             todo!();
         };
 
@@ -221,7 +219,7 @@ where
     let req = Request::from_parts(parts, body.into());
 
     let session = if let Some(Path(session)) = session {
-        let Ok(session) = session.parse::<<Auth as Authenticator>::LoginSessionId>() else {
+        let Ok(session) = session.parse::<<Auth as Authenticator>::SessionId>() else {
             todo!("invalid session id, bailing...");
         };
         Some(session)

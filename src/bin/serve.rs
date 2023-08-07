@@ -1,9 +1,14 @@
 use std::net::TcpListener;
 
 use listenfd::ListenFd;
-use registry::handlers::v1;
-use registry::stores::{
-    InMemoryTokenAuthorizer, OAuthAuthenticator, Policy, ReadThrough, RemoteRegistry,
+use registry::{
+    routes,
+    services::{
+        authenticators::OAuth,
+        storage::package::{ReadThrough, RemoteRegistry},
+        token_authorizers::InMemory,
+    },
+    Policy,
 };
 
 fn setup_tracing() {
@@ -47,9 +52,9 @@ async fn main() -> anyhow::Result<()> {
 
     let policy = Policy::new()
         .with_package_storage(ReadThrough::new(pb, RemoteRegistry::default()))
-        .with_authenticator(OAuthAuthenticator::for_github())
-        .with_token_authorizer(InMemoryTokenAuthorizer::new());
-    let app = v1::routes(policy);
+        .with_authenticator(OAuth::for_github())
+        .with_token_authorizer(InMemory::new());
+    let app = routes(policy);
 
     axum::Server::from_tcp(bind)?
         .serve(app.into_make_service())
