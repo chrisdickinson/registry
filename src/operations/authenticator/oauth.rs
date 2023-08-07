@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::models::User;
-use crate::operations::{Authenticator, Configurator};
+use crate::operations::{Authenticator, Configurator, UserStorage};
 use axum::body::Body;
 use axum::http::{HeaderMap, Request, StatusCode};
 use axum::{Json, RequestExt};
@@ -15,7 +15,7 @@ use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope,
     TokenResponse, TokenUrl,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use url::Url;
 use uuid::Uuid;
@@ -28,6 +28,24 @@ pub struct OAuthAuthenticator {
     auth_url: AuthUrl,
     token_url: TokenUrl,
     scopes: Vec<Scope>,
+}
+
+// We pronounce "GitHub" as "j'thoob" here.
+#[derive(Clone, Serialize, Deserialize)]
+struct GitHubUser {
+    login: String,
+    email: String,
+    name: Option<String>,
+}
+
+impl From<GitHubUser> for User {
+    fn from(userdata: GitHubUser) -> Self {
+        Self {
+            name: userdata.login,
+            email: userdata.email,
+            full_name: userdata.name,
+        }
+    }
 }
 
 impl std::fmt::Debug for OAuthAuthenticator {
@@ -148,9 +166,10 @@ impl Authenticator for OAuthAuthenticator {
     // TODO: oh my god this is such slop. It really needs to be revisited when:
     // - we add more oauth providers (google, auth0, okta; oidc in general)
     // - we start to tighten our error handling
-    async fn complete_login_session<C: Configurator + Send + Sync>(
+    async fn complete_login_session<C: Configurator + Send + Sync, U: UserStorage + Send + Sync>(
         &self,
         config: &C,
+        user_storage: &U,
         req: Request<Body>,
         bearer: Option<Self::SessionId>,
     ) -> anyhow::Result<Self::Response> {
@@ -218,14 +237,6 @@ impl Authenticator for OAuthAuthenticator {
                 let client = reqwest::Client::new();
                 let auth_header = format!("Bearer {}", token.access_token().secret());
 
-                // We pronounce "GitHub" as "j'thoob" here.
-                #[derive(Deserialize)]
-                struct GitHubUser {
-                    login: String,
-                    email: String,
-                    name: Option<String>,
-                }
-
                 let userdata = client
                     .get("https://api.github.com/user")
                     .header("Authorization", auth_header)
@@ -239,11 +250,9 @@ impl Authenticator for OAuthAuthenticator {
                     .json::<GitHubUser>()
                     .await?;
 
-                session.user = Some(User {
-                    name: userdata.login,
-                    email: userdata.email,
-                    full_name: userdata.name,
-                });
+                let user = user_storage.register_user(userdata).await?;
+
+                session.user = Some(user);
             };
 
             let mut headers = HeaderMap::new();

@@ -1,18 +1,25 @@
 use axum::{extract::FromRequestParts, http::request::Parts, http::StatusCode, Json};
 
-use crate::{models::User, operations::TokenAuthorizer};
+use crate::{
+    models::User,
+    operations::{policy::PolicyHolder, TokenAuthorizer},
+};
 
 pub(crate) struct Authenticated(pub User);
 
 #[async_trait::async_trait]
 impl<S> FromRequestParts<S> for Authenticated
 where
-    S: Send + Sync + TokenAuthorizer,
+    S: Send + Sync + PolicyHolder,
 {
     type Rejection = (StatusCode, Json<serde_json::Value>);
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        match state.authenticate_session(parts).await {
+        match state
+            .as_token_authorizer()
+            .authenticate_session(parts)
+            .await
+        {
             Ok(Some(user)) => Ok(Authenticated(user)),
             Ok(None) => Err((
                 StatusCode::UNAUTHORIZED,

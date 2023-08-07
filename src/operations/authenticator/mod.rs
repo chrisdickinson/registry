@@ -7,6 +7,8 @@ use serde::Serialize;
 use crate::models::User;
 use crate::operations::Configurator;
 
+use super::UserStorage;
+
 pub(crate) mod oauth;
 
 #[derive(Clone, Debug)]
@@ -30,9 +32,10 @@ pub trait Authenticator: Send + Sync {
         session: Self::SessionId,
     ) -> anyhow::Result<Option<Self::User>>;
 
-    async fn complete_login_session<C: Configurator + Send + Sync>(
+    async fn complete_login_session<C: Configurator + Send + Sync, U: UserStorage + Send + Sync>(
         &self,
         config: &C,
+        user_storage: &U,
         req: Request<Body>,
         session: Option<Self::SessionId>,
     ) -> anyhow::Result<Self::Response>;

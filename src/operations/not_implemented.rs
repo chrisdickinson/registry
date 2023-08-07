@@ -23,9 +23,10 @@ impl<T: Unimplemented> Authenticator for T {
         Err(anyhow::anyhow!("not implemented"))
     }
 
-    async fn complete_login_session<C: Configurator + Send + Sync>(
+    async fn complete_login_session<C: Configurator + Send + Sync, U: UserStorage + Send + Sync>(
         &self,
         _config: &C,
+        _user_storage: &U,
         _req: Request<Body>,
         _id: Option<Self::SessionId>,
     ) -> anyhow::Result<Self::Response> {

@@ -1,9 +1,23 @@
-use axum_extra::extract::cookie::Key;
-use serde::Serialize;
+
+
 
 use super::configurator::env::EnvConfigurator;
 use super::not_implemented::NotImplemented;
 use super::*;
+
+pub trait PolicyHolder {
+    type Authenticator: Authenticator + Send + Sync;
+    type TokenAuthorizer: TokenAuthorizer + Send + Sync;
+    type UserStorage: UserStorage + Send + Sync;
+    type PackageStorage: PackageStorage + Send + Sync;
+    type Configurator: Configurator + Send + Sync;
+
+    fn as_authenticator(&self) -> &Self::Authenticator;
+    fn as_token_authorizer(&self) -> &Self::TokenAuthorizer;
+    fn as_user_storage(&self) -> &Self::UserStorage;
+    fn as_package_storage(&self) -> &Self::PackageStorage;
+    fn as_configurator(&self) -> &Self::Configurator;
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct Policy<
@@ -41,6 +55,45 @@ impl Policy {
 impl Default for Policy {
     fn default() -> Self {
         Policy::new()
+    }
+}
+
+impl<A, T, U, P, C> PolicyHolder for Policy<A, T, U, P, C>
+where
+    A: Authenticator + Send + Sync,
+    T: TokenAuthorizer + Send + Sync,
+    U: UserStorage + Send + Sync,
+    P: PackageStorage + Send + Sync,
+    C: Configurator + Send + Sync,
+{
+    type Authenticator = A;
+
+    type TokenAuthorizer = T;
+
+    type UserStorage = U;
+
+    type PackageStorage = P;
+
+    type Configurator = C;
+
+    fn as_authenticator(&self) -> &Self::Authenticator {
+        &self.auth
+    }
+
+    fn as_token_authorizer(&self) -> &Self::TokenAuthorizer {
+        &self.token_authz
+    }
+
+    fn as_user_storage(&self) -> &Self::UserStorage {
+        &self.user_storage
+    }
+
+    fn as_package_storage(&self) -> &Self::PackageStorage {
+        &self.package_storage
+    }
+
+    fn as_configurator(&self) -> &Self::Configurator {
+        &self.configurator
     }
 }
 
@@ -102,136 +155,5 @@ where
             user_storage: self.user_storage,
             package_storage: self.package_storage,
         }
-    }
-}
-
-#[async_trait::async_trait]
-impl<A, T, U, P, C> Authenticator for Policy<A, T, U, P, C>
-where
-    A: Authenticator + Send + Sync,
-    T: TokenAuthorizer + Send + Sync,
-    U: UserStorage + Send + Sync,
-    P: PackageStorage + Send + Sync,
-    C: Configurator + Send + Sync,
-{
-    type SessionId = A::SessionId;
-    type Response = A::Response;
-    type User = A::User;
-
-    async fn start_login_session(&self, req: Request<Body>) -> anyhow::Result<Self::SessionId> {
-        self.auth.start_login_session(req).await
-    }
-
-    async fn poll_login_session(&self, id: Self::SessionId) -> anyhow::Result<Option<Self::User>> {
-        self.auth.poll_login_session(id).await
-    }
-
-    async fn complete_login_session<C0: Configurator + Send + Sync>(
-        &self,
-        _config: &C0,
-        req: Request<Body>,
-        id: Option<Self::SessionId>,
-    ) -> anyhow::Result<Self::Response> {
-        self.auth.complete_login_session(self, req, id).await
-    }
-}
-
-#[async_trait::async_trait]
-impl<A, T, U, P, C> TokenAuthorizer for Policy<A, T, U, P, C>
-where
-    A: Authenticator + Send + Sync,
-    T: TokenAuthorizer + Send + Sync,
-    U: UserStorage + Send + Sync,
-    P: PackageStorage + Send + Sync,
-    C: Configurator + Send + Sync,
-{
-    type TokenSessionId = T::TokenSessionId;
-
-    async fn start_session(&self, user: User) -> anyhow::Result<Self::TokenSessionId> {
-        self.token_authz.start_session(user).await
-    }
-
-    async fn authenticate_session_bearer(
-        &self,
-        req: Self::TokenSessionId,
-    ) -> anyhow::Result<Option<User>> {
-        self.token_authz.authenticate_session_bearer(req).await
-    }
-
-    async fn authenticate_session(&self, req: &Parts) -> anyhow::Result<Option<User>> {
-        self.token_authz.authenticate_session(req).await
-    }
-}
-
-#[async_trait::async_trait]
-impl<A, T, U, P, C> PackageStorage for Policy<A, T, U, P, C>
-where
-    A: Authenticator + Send + Sync,
-    T: TokenAuthorizer + Send + Sync,
-    U: UserStorage + Send + Sync,
-    P: PackageStorage + Send + Sync,
-    C: Configurator + Send + Sync,
-{
-    type Error = P::Error;
-    async fn stream_packument(
-        &self,
-        name: &PackageIdentifier,
-    ) -> anyhow::Result<BoxStream<'static, Result<Bytes, Self::Error>>> {
-        self.package_storage.stream_packument(name).await
-    }
-
-    async fn stream_tarball(
-        &self,
-        name: &PackageIdentifier,
-        version: &str,
-    ) -> anyhow::Result<BoxStream<'static, Result<Bytes, Self::Error>>> {
-        self.package_storage.stream_tarball(name, version).await
-    }
-}
-
-#[async_trait::async_trait]
-impl<A, T, U, P, C> Configurator for Policy<A, T, U, P, C>
-where
-    A: Authenticator + Send + Sync,
-    T: TokenAuthorizer + Send + Sync,
-    U: UserStorage + Send + Sync,
-    P: PackageStorage + Send + Sync,
-    C: Configurator + Send + Sync,
-{
-    fn fqdn(&self) -> &str {
-        self.configurator.fqdn()
-    }
-
-    async fn oauth_config(&self) -> anyhow::Result<(String, String)> {
-        self.configurator.oauth_config().await
-    }
-
-    async fn cookie_key(&self) -> anyhow::Result<Key> {
-        self.configurator.cookie_key().await
-    }
-}
-
-#[async_trait::async_trait]
-impl<A, T, U, P, C> UserStorage for Policy<A, T, U, P, C>
-where
-    A: Authenticator + Send + Sync,
-    T: TokenAuthorizer + Send + Sync,
-    U: UserStorage + Send + Sync,
-    P: PackageStorage + Send + Sync,
-    C: Configurator + Send + Sync,
-{
-    async fn register_user<UserImpl: Into<User> + Serialize + Send + Sync>(
-        &self,
-        user: UserImpl,
-    ) -> anyhow::Result<User> {
-        self.user_storage.register_user(user).await
-    }
-
-    async fn get_user(&self, username: &str) -> anyhow::Result<User> {
-        self.user_storage.get_user(username).await
-    }
-
-    async fn list_users(&self) -> anyhow::Result<Vec<User>> {
-        self.user_storage.list_users().await
     }
 }

@@ -6,7 +6,8 @@ use registry::{
     services::{
         authenticators::OAuth,
         storage::package::{ReadThrough, RemoteRegistry},
-        token_authorizers::InMemory,
+        storage::user,
+        token_authorizers,
     },
     Policy,
 };
@@ -53,7 +54,8 @@ async fn main() -> anyhow::Result<()> {
     let policy = Policy::new()
         .with_package_storage(ReadThrough::new(pb, RemoteRegistry::default()))
         .with_authenticator(OAuth::for_github())
-        .with_token_authorizer(InMemory::new());
+        .with_token_authorizer(token_authorizers::InMemory::new())
+        .with_user_storage(user::InMemory::new());
     let app = routes(policy);
 
     axum::Server::from_tcp(bind)?

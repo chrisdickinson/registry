@@ -13,7 +13,7 @@ pub struct InMemoryUserStorage {
 }
 
 impl InMemoryUserStorage {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             users: Arc::new(RwLock::new(HashMap::new())),
         }

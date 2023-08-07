@@ -15,7 +15,10 @@ use tracing::{instrument, Level};
 
 use crate::extractors::Authenticated;
 use crate::models::{PackageIdentifier, PackageModification, Packument};
-use crate::operations::{Authenticator, Configurator, PackageStorage, TokenAuthorizer};
+use crate::operations::policy::PolicyHolder;
+use crate::operations::{
+    Authenticator, Configurator, PackageStorage, TokenAuthorizer, UserStorage,
+};
 
 #[instrument(level = "info", fields(pkg))]
 async fn get_packument<Storage>(
@@ -23,13 +26,14 @@ async fn get_packument<Storage>(
     Path(pkg): Path<String>,
 ) -> Result<impl IntoResponse, StatusCode>
 where
-    Storage: PackageStorage + std::fmt::Debug,
+    Storage: PolicyHolder + std::fmt::Debug,
 {
     let Ok(pkg) = pkg.parse() else {
         return Err(StatusCode::BAD_REQUEST)
     };
 
     let stream = state
+        .as_package_storage()
         .stream_packument(&pkg)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -44,7 +48,7 @@ async fn put_packument<Storage>(
     Json(payload): Json<Packument>,
 ) -> Result<impl IntoResponse, StatusCode>
 where
-    Storage: PackageStorage + std::fmt::Debug,
+    Storage: PolicyHolder + std::fmt::Debug,
 {
     if payload.id.as_deref() != Some(pkg.as_str()) {
         return Err(StatusCode::BAD_REQUEST);
@@ -55,6 +59,7 @@ where
     };
 
     let old_packument = state
+        .as_package_storage()
         .fetch_packument(&pkg)
         .await
         .ok()
@@ -74,7 +79,7 @@ async fn put_packument_at_rev<Storage>(
     payload: Json<Packument>,
 ) -> Result<impl IntoResponse, StatusCode>
 where
-    Storage: PackageStorage + std::fmt::Debug,
+    Storage: PolicyHolder + std::fmt::Debug,
 {
     put_packument(state, Path(pkg), payload).await
 }
@@ -86,7 +91,7 @@ async fn put_scoped_packument<Storage>(
     payload: Json<Packument>,
 ) -> Result<impl IntoResponse, StatusCode>
 where
-    Storage: PackageStorage + std::fmt::Debug,
+    Storage: PolicyHolder + std::fmt::Debug,
 {
     let pkg = format!("@{}/{}", scope, pkg);
     put_packument(state, Path(pkg), payload).await
@@ -97,7 +102,7 @@ async fn get_scoped_packument<Storage>(
     Path((scope, pkg)): Path<(String, String)>,
 ) -> Result<impl IntoResponse, StatusCode>
 where
-    Storage: PackageStorage + std::fmt::Debug,
+    Storage: PolicyHolder + std::fmt::Debug,
 {
     let pkg = format!("@{}/{}", scope, pkg);
     get_packument(State(state), Path(pkg)).await
@@ -109,7 +114,7 @@ async fn get_tarball<Storage>(
     Path((pkg, tarball)): Path<(String, String)>,
 ) -> Result<impl IntoResponse, StatusCode>
 where
-    Storage: PackageStorage + std::fmt::Debug,
+    Storage: PolicyHolder + std::fmt::Debug,
 {
     let pkg: PackageIdentifier = pkg.parse().unwrap();
     if !tarball.starts_with(pkg.name.as_str())
@@ -122,6 +127,7 @@ where
     let version = tarball.get(pkg.name.len() + 1..tarball.len() - 4).unwrap();
 
     let stream = state
+        .as_package_storage()
         .stream_tarball(&pkg, version)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -134,7 +140,7 @@ async fn get_scoped_tarball<Storage>(
     Path((scope, pkg, tarball)): Path<(String, String, String)>,
 ) -> Result<impl IntoResponse, StatusCode>
 where
-    Storage: PackageStorage + std::fmt::Debug,
+    Storage: PolicyHolder + std::fmt::Debug,
 {
     let pkg = format!("@{}/{}", scope, pkg);
     get_tarball(State(state), Path((pkg, tarball))).await
@@ -146,20 +152,20 @@ async fn get_login_poll<Auth>(
     Path(session): Path<String>,
 ) -> impl IntoResponse
 where
-    Auth: Authenticator + TokenAuthorizer + std::fmt::Debug,
+    Auth: PolicyHolder + std::fmt::Debug,
 {
-    let Ok(session) = session.parse::<<Auth as Authenticator>::SessionId>() else {
+    let Ok(session) = session.parse::<<Auth::Authenticator as Authenticator>::SessionId>() else {
         todo!();
     };
 
-    let Ok(user) = state.poll_login_session(session).await else {
+    let Ok(user) = state.as_authenticator().poll_login_session(session).await else {
         todo!();
     };
 
     if let Some(user) = user {
         // TODO: this is the point at which we add them to UserStorage -- which is where
         // we may wish to apply WASM-based filtering of incoming users.
-        let Ok(token) = state.start_session(user.into()).await else {
+        let Ok(token) = state.as_token_authorizer().start_session(user.into()).await else {
             todo!();
         };
 
@@ -188,14 +194,14 @@ async fn post_login<Auth, B>(
     req: Request<B>,
 ) -> Result<impl IntoResponse, impl IntoResponse>
 where
-    Auth: Authenticator + Configurator + std::fmt::Debug,
+    Auth: PolicyHolder + std::fmt::Debug,
     B: std::fmt::Debug + Into<axum::body::Body>,
 {
-    let fqdn = state.fqdn();
+    let fqdn = state.as_configurator().fqdn();
 
     let (parts, body) = req.into_parts();
     let req = Request::from_parts(parts, body.into());
-    let Ok(id) = state.start_login_session(req).await else {
+    let Ok(id) = state.as_authenticator().start_login_session(req).await else {
         return Err(StatusCode::BAD_REQUEST)
     };
 
@@ -212,14 +218,14 @@ async fn www_login<Auth, B>(
     req: Request<B>,
 ) -> impl IntoResponse
 where
-    Auth: Authenticator + Configurator + std::fmt::Debug,
+    Auth: PolicyHolder + std::fmt::Debug,
     B: std::fmt::Debug + Into<axum::body::Body>,
 {
     let (parts, body) = req.into_parts();
     let req = Request::from_parts(parts, body.into());
 
     let session = if let Some(Path(session)) = session {
-        let Ok(session) = session.parse::<<Auth as Authenticator>::SessionId>() else {
+        let Ok(session) = session.parse::<<Auth::Authenticator as Authenticator>::SessionId>() else {
             todo!("invalid session id, bailing...");
         };
         Some(session)
@@ -227,7 +233,12 @@ where
         None
     };
 
-    let Ok(result) = state.complete_login_session(&state, req, session).await.map_err(|e| dbg!(e)) else {
+    let Ok(result) = state.as_authenticator().complete_login_session(
+        state.as_configurator(),
+        state.as_user_storage(),
+        req,
+        session
+    ).await.map_err(|e| dbg!(e)) else {
         todo!("could not complete login session...");
     };
 
@@ -240,13 +251,13 @@ async fn get_user<Auth>(
     Path(user): Path<String>,
 ) -> Result<impl IntoResponse, StatusCode>
 where
-    Auth: Authenticator + std::fmt::Debug,
+    Auth: PolicyHolder + std::fmt::Debug,
 {
     let Some(username) = user.strip_prefix(':') else {
         return Err(StatusCode::NOT_FOUND);
     };
 
-    let Ok(Some(user)) = state.get_user(username).await else {
+    let Ok(user) = state.as_user_storage().get_user(username).await else {
         return Err(StatusCode::NOT_FOUND);
     };
 
@@ -267,15 +278,7 @@ async fn whoami(Authenticated(user): Authenticated) -> impl IntoResponse {
 
 pub fn routes<S, B>(state: S) -> Router<(), B>
 where
-    S: PackageStorage
-        + Clone
-        + Sync
-        + Send
-        + 'static
-        + std::fmt::Debug
-        + Authenticator
-        + TokenAuthorizer
-        + Configurator,
+    S: PolicyHolder + Clone + Sync + Send + 'static + std::fmt::Debug,
     B: Sync + Send + HttpBody + std::fmt::Debug + Into<Body> + 'static,
     <B as HttpBody>::Data: 'static + Send + Sync,
     <B as HttpBody>::Error: std::error::Error + 'static + Send + Sync,
