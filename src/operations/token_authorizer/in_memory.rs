@@ -1,30 +1,16 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+
 use std::sync::Arc;
 
-use crate::models::{PackageIdentifier, User};
-use crate::operations::{Authenticator, Configurator, PackageStorage, TokenAuthorizer};
-use axum::body::Body;
-use axum::http::{HeaderMap, StatusCode};
-use axum::{
-    body::Bytes,
-    http::{request::Parts, Request},
-};
-use axum::{Json, RequestExt};
-use axum_extra::extract::cookie::{Cookie, Key};
-use axum_extra::extract::SignedCookieJar;
-use chrono::{DateTime, Utc};
-use futures::stream::BoxStream;
-use futures_util::{pin_mut, StreamExt};
-use oauth2::basic::BasicClient;
-use oauth2::reqwest::async_http_client;
-use oauth2::{
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope,
-    TokenResponse, TokenUrl,
-};
-use serde::Deserialize;
+use crate::models::User;
+use crate::operations::TokenAuthorizer;
+
+use chrono::Utc;
+
+use futures_util::StreamExt;
+
 use tokio::sync::RwLock;
-use url::Url;
+
 use uuid::Uuid;
 
 use super::TokenSession;
@@ -36,7 +22,7 @@ pub struct InMemoryTokenAuthorizer {
 
 impl std::fmt::Debug for InMemoryTokenAuthorizer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut formatter = f.debug_struct("OAuthAuthenticator");
+        let mut formatter = f.debug_struct("InMemoryTokenAuthorizer");
         if let Ok(sessions) = self.token_sessions.try_read() {
             formatter.field("token_sessions", &sessions);
         }

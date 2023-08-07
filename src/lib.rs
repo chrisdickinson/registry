@@ -28,6 +28,8 @@ pub mod services {
             pub use crate::operations::package_storage::remote::RemoteRegistry;
         }
 
-        pub mod user {}
+        pub mod user {
+            pub use crate::operations::user_storage::in_memory::InMemoryUserStorage as InMemory;
+        }
     }
 }

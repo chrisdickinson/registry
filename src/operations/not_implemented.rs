@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use super::*;
 
 trait Unimplemented: Send + Sync {}
@@ -59,6 +61,24 @@ impl<T: Unimplemented> PackageStorage for T {
         _name: &PackageIdentifier,
         _version: &str,
     ) -> anyhow::Result<BoxStream<'static, Result<Bytes, Self::Error>>> {
+        Err(anyhow::anyhow!("not implemented"))
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: Unimplemented> UserStorage for T {
+    async fn register_user<U: Into<User> + Serialize + Send + Sync>(
+        &self,
+        _user: U,
+    ) -> anyhow::Result<User> {
+        Err(anyhow::anyhow!("not implemented"))
+    }
+
+    async fn get_user(&self, _username: &str) -> anyhow::Result<User> {
+        Err(anyhow::anyhow!("not implemented"))
+    }
+
+    async fn list_users(&self) -> anyhow::Result<Vec<User>> {
         Err(anyhow::anyhow!("not implemented"))
     }
 }

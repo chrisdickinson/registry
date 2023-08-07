@@ -2,6 +2,8 @@ use serde::Serialize;
 
 use crate::models::User;
 
+pub(crate) mod in_memory;
+
 #[async_trait::async_trait]
 pub trait UserStorage: Send + Sync {
     async fn register_user<U: Into<User> + Serialize + Send + Sync>(

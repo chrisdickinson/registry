@@ -1,0 +1,34 @@
+- [ ] tighten errors using thiserror
+- [ ] broaden oauth implementation
+  - [ ] verify that we work with google, too (PCKE!)
+  - [ ] ... and okta/auth0
+- [ ] user storage
+  - this is the place where we decide if a GoogleUser or a GitHub user or whatever _can_ act as a user for this
+    system
+  - as such, we need the Authenticator to return "rich" user objects -- anything that can be turned _into_ a Regi user,
+    but not necessarily a Regi user from the get-go.
+- [ ] package storage
+  - right now we provide remote and cache read-through
+    - remote really _ought_ to rewrite package tarball urls on packuments as they come through
+    - ALSO: remote _should_ apply the same "accept/reject" package policy to remote packages as is applied to "local" published packages
+- [ ] wasm plugin support
+  - wasm plugins for package storage and user storage AT THE LEAST
+- [ ] deno support
+- [ ] docker support?
+- [ ] web browser file browsing
+- [ ] operationalization
+  - can we embed this in an envoy?
+  - can we provide dockerfiles?
+  - configurator
+    - provide aws secret manager
+    - provide vault
+    - provide json/yaml/xml/toml to set up server oauth
+  - packagestorage
+    - provide aws s3/gcs/cloudflare r2
+  - userstorage
+    - provide firebase/dynamodb support
+  - tokenauthorizer
+    - redis
+    - firebase/dynamodb
+- [ ] style login page
+
